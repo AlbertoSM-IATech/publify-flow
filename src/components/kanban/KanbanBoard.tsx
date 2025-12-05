@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanban } from '@/hooks/useKanban';
@@ -18,6 +18,20 @@ export function KanbanBoard() {
   const [currentView, setCurrentView] = useState<ViewType>('kanban');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -69,13 +83,23 @@ export function KanbanBoard() {
             <h1 className="text-2xl font-heading font-semibold text-foreground">Tareas</h1>
             <p className="text-sm text-muted-foreground">Gestiona tu trabajo de forma visual</p>
           </div>
-          <Button 
-            onClick={() => kanban.addTask(kanban.columns[0]?.id || 'pending', { title: 'Nueva tarea' })}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-coral"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nueva tarea
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsDark(!isDark)}
+              className="border-border"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
+            <Button 
+              onClick={() => kanban.addTask(kanban.columns[0]?.id || 'research', { title: 'Nueva tarea' })}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-coral"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva tarea
+            </Button>
+          </div>
         </div>
 
         {/* Toolbar */}
@@ -192,8 +216,11 @@ export function KanbanBoard() {
 
         {currentView === 'calendar' && (
           <CalendarView
-            tasks={kanban.tasks}
+            tasks={kanban.getFilteredTasks()}
+            columns={kanban.columns}
             onTaskClick={handleTaskClick}
+            onAddTask={kanban.addTask}
+            onUpdateTask={kanban.updateTask}
           />
         )}
 
