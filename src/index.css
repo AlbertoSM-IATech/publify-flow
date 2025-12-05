@@ -159,7 +159,12 @@
   }
 
   .priority-critical {
-    @apply bg-red-500/10 text-red-400 border-red-500/30;
+    @apply bg-red-500/10 border-red-500/30;
+    color: hsl(0 84% 60%);
+  }
+
+  .dark .priority-critical {
+    @apply text-red-400;
   }
 
   .priority-high {
@@ -167,11 +172,21 @@
   }
 
   .priority-medium {
-    @apply bg-amber-500/10 text-amber-400 border-amber-500/30;
+    @apply bg-amber-500/10 border-amber-500/30;
+    color: hsl(38 92% 40%);
+  }
+
+  .dark .priority-medium {
+    @apply text-amber-400;
   }
 
   .priority-low {
-    @apply bg-green-500/10 text-green-400 border-green-500/30;
+    @apply bg-green-500/10 border-green-500/30;
+    color: hsl(142 71% 35%);
+  }
+
+  .dark .priority-low {
+    @apply text-green-400;
   }
 
   .status-badge {

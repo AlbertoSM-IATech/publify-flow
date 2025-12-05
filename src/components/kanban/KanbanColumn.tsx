@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import { MoreHorizontal, Plus, GripVertical, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { 
+  MoreHorizontal, Plus, GripVertical, Pencil, Trash2, EyeOff,
+  Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
+  TrendingUp, Megaphone, Settings, Check, Folder
+} from 'lucide-react';
 import { Column, Task } from '@/types/kanban';
 import { TaskCard } from './TaskCard';
 import { Button } from '@/components/ui/button';
@@ -12,6 +16,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+
+const iconMap: Record<string, React.ReactNode> = {
+  search: <Search className="w-4 h-4" />,
+  layout: <Layout className="w-4 h-4" />,
+  'file-text': <FileText className="w-4 h-4" />,
+  edit: <Edit3 className="w-4 h-4" />,
+  palette: <Palette className="w-4 h-4" />,
+  'check-circle': <CheckCircle className="w-4 h-4" />,
+  upload: <Upload className="w-4 h-4" />,
+  'trending-up': <TrendingUp className="w-4 h-4" />,
+  megaphone: <Megaphone className="w-4 h-4" />,
+  settings: <Settings className="w-4 h-4" />,
+  check: <Check className="w-4 h-4" />,
+  folder: <Folder className="w-4 h-4" />,
+};
 
 interface KanbanColumnProps {
   column: Column;
@@ -87,6 +106,7 @@ export function KanbanColumn({
   };
 
   const isOverWipLimit = column.wipLimit !== null && tasks.length >= column.wipLimit;
+  const columnIcon = iconMap[column.icon] || <Folder className="w-4 h-4" />;
 
   return (
     <div
@@ -104,7 +124,12 @@ export function KanbanColumn({
       <div className="flex items-center justify-between mb-3 group">
         <div className="flex items-center gap-2 flex-1">
           <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab transition-opacity" />
-          <span className="text-lg">{column.icon}</span>
+          <div 
+            className="flex items-center justify-center w-6 h-6 rounded"
+            style={{ backgroundColor: `${column.color}20`, color: column.color }}
+          >
+            {columnIcon}
+          </div>
           
           {isEditing ? (
             <Input
@@ -120,7 +145,7 @@ export function KanbanColumn({
             />
           ) : (
             <h3
-              className="font-heading font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+              className="font-heading font-semibold text-foreground cursor-pointer hover:text-primary transition-colors text-sm"
               onClick={() => setIsEditing(true)}
             >
               {column.title}
