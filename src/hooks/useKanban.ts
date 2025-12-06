@@ -152,7 +152,7 @@ const sampleTasks: Task[] = [
 export function useKanban() {
   const [tasks, setTasks] = useState<Task[]>(sampleTasks);
   const [columns, setColumns] = useState<Column[]>(defaultColumns);
-  const [availableTags] = useState<Tag[]>(defaultTags);
+  const [availableTags, setAvailableTags] = useState<Tag[]>(defaultTags);
   const [filter, setFilter] = useState<Filter>({
     priority: [],
     tags: [],
@@ -161,6 +161,39 @@ export function useKanban() {
     search: '',
   });
   const [automations, setAutomations] = useState<Automation[]>([]);
+
+  // Tag management functions
+  const addTag = useCallback((name: string, color: string) => {
+    const newTag: Tag = {
+      id: generateId(),
+      name,
+      color,
+    };
+    setAvailableTags(prev => [...prev, newTag]);
+    return newTag;
+  }, []);
+
+  const updateTag = useCallback((tagId: string, updates: Partial<Tag>) => {
+    setAvailableTags(prev => prev.map(tag =>
+      tag.id === tagId ? { ...tag, ...updates } : tag
+    ));
+    // Also update the tag in all tasks that use it
+    setTasks(prev => prev.map(task => ({
+      ...task,
+      tags: task.tags.map(tag =>
+        tag.id === tagId ? { ...tag, ...updates } : tag
+      ),
+    })));
+  }, []);
+
+  const deleteTag = useCallback((tagId: string) => {
+    setAvailableTags(prev => prev.filter(tag => tag.id !== tagId));
+    // Remove the tag from all tasks
+    setTasks(prev => prev.map(task => ({
+      ...task,
+      tags: task.tags.filter(tag => tag.id !== tagId),
+    })));
+  }, []);
 
   const addTask = useCallback((columnId: string, task: Partial<Task>) => {
     const newTask: Task = {
@@ -382,5 +415,8 @@ export function useKanban() {
     toggleChecklistItem,
     deleteChecklistItem,
     getFilteredTasks,
+    addTag,
+    updateTag,
+    deleteTag,
   };
 }

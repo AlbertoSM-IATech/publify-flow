@@ -389,40 +389,28 @@ export function TaskDetailPanel({
               </div>
             </div>
 
-            {/* Related Fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Libro relacionado
-                </label>
-                <Input
-                  value={task.relatedBook || ''}
-                  onChange={(e) => onUpdate({ relatedBook: e.target.value || null })}
-                  placeholder="Ej: KDP Book X"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Mercado
-                </label>
-                <Select
-                  value={task.relatedMarket || 'none'}
-                  onValueChange={(value) => onUpdate({ relatedMarket: value === 'none' ? null : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin mercado</SelectItem>
-                    <SelectItem value=".com">.com (US)</SelectItem>
-                    <SelectItem value=".es">.es (España)</SelectItem>
-                    <SelectItem value=".co.uk">.co.uk (UK)</SelectItem>
-                    <SelectItem value=".de">.de (Alemania)</SelectItem>
-                    <SelectItem value=".fr">.fr (Francia)</SelectItem>
-                    <SelectItem value=".it">.it (Italia)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Market Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Mercado
+              </label>
+              <Select
+                value={task.relatedMarket || 'none'}
+                onValueChange={(value) => onUpdate({ relatedMarket: value === 'none' ? null : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin mercado</SelectItem>
+                  <SelectItem value=".com">.com (US)</SelectItem>
+                  <SelectItem value=".es">.es (España)</SelectItem>
+                  <SelectItem value=".co.uk">.co.uk (UK)</SelectItem>
+                  <SelectItem value=".de">.de (Alemania)</SelectItem>
+                  <SelectItem value=".fr">.fr (Francia)</SelectItem>
+                  <SelectItem value=".it">.it (Italia)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Metadata */}
