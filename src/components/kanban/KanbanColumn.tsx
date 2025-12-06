@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { 
   MoreHorizontal, Plus, GripVertical, Pencil, Trash2, EyeOff,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
@@ -36,7 +36,7 @@ interface KanbanColumnProps {
   column: Column;
   tasks: Task[];
   onTaskClick: (task: Task) => void;
-  onAddTask: (task: Partial<Task>) => void;
+  onOpenNewTaskDialog: () => void;
   onUpdateColumn: (updates: Partial<Column>) => void;
   onDeleteColumn: () => void;
   onMoveTask: (taskId: string, columnId: string, index: number) => void;
@@ -46,14 +46,15 @@ interface KanbanColumnProps {
   onColumnDragStart: (e: React.DragEvent) => void;
   onColumnDragEnd: () => void;
   onColumnDrop: (e: React.DragEvent) => void;
-  isDragging: boolean;
+  isDraggingColumn: boolean;
+  isAnyTaskDragging: boolean;
 }
 
 export function KanbanColumn({
   column,
   tasks,
   onTaskClick,
-  onAddTask,
+  onOpenNewTaskDialog,
   onUpdateColumn,
   onDeleteColumn,
   onMoveTask,
@@ -63,35 +64,29 @@ export function KanbanColumn({
   onColumnDragStart,
   onColumnDragEnd,
   onColumnDrop,
-  isDragging,
+  isDraggingColumn,
+  isAnyTaskDragging,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLDivElement>(null);
 
   const handleTitleSave = () => {
-    // BUG FIX: Validate title is not empty, revert to original if needed
     const trimmedTitle = editTitle.trim();
     if (trimmedTitle) {
       onUpdateColumn({ title: trimmedTitle });
     } else {
-      setEditTitle(column.title); // Revert to original
+      setEditTitle(column.title);
     }
     setIsEditing(false);
   };
 
-  const handleAddTask = () => {
-    if (newTaskTitle.trim()) {
-      onAddTask({ title: newTaskTitle.trim() });
-      setNewTaskTitle('');
-      setIsAddingTask(false);
-    }
-  };
-
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    // Only handle task drop, not column drop
     if (draggedTaskId) {
       setDropIndex(index);
     }
@@ -99,14 +94,51 @@ export function KanbanColumn({
 
   const handleDrop = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     if (draggedTaskId) {
       onMoveTask(draggedTaskId, column.id, index);
     }
     setDropIndex(null);
   };
 
-  const handleDragLeave = () => {
-    setDropIndex(null);
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if leaving the container entirely
+    const rect = columnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const { clientX, clientY } = e;
+      if (
+        clientX < rect.left ||
+        clientX > rect.right ||
+        clientY < rect.top ||
+        clientY > rect.bottom
+      ) {
+        setDropIndex(null);
+      }
+    }
+  };
+
+  // Column drag handlers - only triggered from the grip handle
+  const handleColumnDragStart = (e: React.DragEvent) => {
+    e.stopPropagation();
+    onColumnDragStart(e);
+  };
+
+  // Handle column drop - only when dragging columns, not tasks
+  const handleColumnDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only accept column drops when a column is being dragged
+    // and no task is being dragged
+    if (!isAnyTaskDragging) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleColumnDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only handle column drops, not task drops
+    if (!draggedTaskId) {
+      onColumnDrop(e);
+    }
   };
 
   const isOverWipLimit = column.wipLimit !== null && tasks.length >= column.wipLimit;
@@ -114,20 +146,27 @@ export function KanbanColumn({
 
   return (
     <div
+      ref={columnRef}
       className={cn(
         "kanban-column transition-all duration-200",
-        isDragging && "opacity-50 scale-95"
+        isDraggingColumn && "opacity-50 scale-95"
       )}
-      draggable
-      onDragStart={onColumnDragStart}
-      onDragEnd={onColumnDragEnd}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onColumnDrop}
+      onDragOver={handleColumnDragOver}
+      onDrop={handleColumnDrop}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-3 group">
         <div className="flex items-center gap-2 flex-1">
-          <GripVertical className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab transition-opacity" />
+          {/* Drag Handle - only this element is draggable for columns */}
+          <div
+            ref={dragHandleRef}
+            draggable
+            onDragStart={handleColumnDragStart}
+            onDragEnd={onColumnDragEnd}
+            className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-muted/50 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <GripVertical className="w-4 h-4 text-muted-foreground" />
+          </div>
           <div 
             className="flex items-center justify-center w-6 h-6 rounded"
             style={{ backgroundColor: `${column.color}20`, color: column.color }}
@@ -191,13 +230,14 @@ export function KanbanColumn({
         </DropdownMenu>
       </div>
 
-      {/* Tasks - BUG FIX: Added proper key stability and drop handling */}
+      {/* Tasks Container */}
       <div
         className="flex-1 overflow-y-auto scrollbar-thin space-y-2 min-h-[100px]"
         onDragLeave={handleDragLeave}
       >
         {tasks.map((task, index) => (
-          <div key={`task-wrapper-${task.id}`}>
+          <div key={task.id}>
+            {/* Drop indicator before this task */}
             {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
               <div className="h-1 bg-primary rounded-full mb-2 animate-pulse" />
             )}
@@ -216,9 +256,12 @@ export function KanbanColumn({
           </div>
         ))}
         
-        {/* Drop zone at the end - BUG FIX: Only show when actually dragging */}
+        {/* Drop zone at the end */}
         <div
-          className={cn("min-h-[60px] rounded-lg transition-colors", draggedTaskId && "bg-muted/30")}
+          className={cn(
+            "min-h-[60px] rounded-lg transition-colors",
+            draggedTaskId && "bg-muted/30 border-2 border-dashed border-primary/30"
+          )}
           onDragOver={(e) => handleDragOver(e, tasks.length)}
           onDrop={(e) => handleDrop(e, tasks.length)}
         >
@@ -228,49 +271,15 @@ export function KanbanColumn({
         </div>
       </div>
 
-      {/* Add Task */}
-      {isAddingTask ? (
-        <div className="mt-2 space-y-2">
-          <Input
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            placeholder="Título de la tarea..."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleAddTask();
-              if (e.key === 'Escape') {
-                setIsAddingTask(false);
-                setNewTaskTitle('');
-              }
-            }}
-            autoFocus
-            className="bg-card"
-          />
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleAddTask} className="flex-1">
-              Añadir
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setIsAddingTask(false);
-                setNewTaskTitle('');
-              }}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          className="w-full mt-2 justify-start text-muted-foreground hover:text-foreground"
-          onClick={() => setIsAddingTask(true)}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Añadir tarea
-        </Button>
-      )}
+      {/* Add Task Button */}
+      <Button
+        variant="ghost"
+        className="w-full mt-2 justify-start text-muted-foreground hover:text-foreground"
+        onClick={onOpenNewTaskDialog}
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        Añadir tarea
+      </Button>
     </div>
   );
 }

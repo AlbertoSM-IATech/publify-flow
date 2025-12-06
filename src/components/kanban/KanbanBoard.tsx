@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart, Sun, Moon } from 'lucide-react';
+import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanban } from '@/hooks/useKanban';
@@ -8,17 +8,21 @@ import { TaskDetailPanel } from './TaskDetailPanel';
 import { FilterPanel } from './FilterPanel';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
+import { NewTaskDialog } from './NewTaskDialog';
+import { TagManager } from './TagManager';
 import { Task, ViewType } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 
 export function KanbanBoard() {
   const kanban = useKanban();
-  // BUG FIX: Store only the task ID, derive the actual task from state for reactivity
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('kanban');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
+  const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
+  const [newTaskColumnId, setNewTaskColumnId] = useState<string | undefined>(undefined);
+  const [showTagManager, setShowTagManager] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark');
@@ -26,8 +30,7 @@ export function KanbanBoard() {
     return true;
   });
 
-  // BUG FIX: Derive selectedTask from tasks array for real-time reactivity
-  // This ensures panel always shows current task state after any update
+  // Derive selectedTask from tasks array for real-time reactivity
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) return null;
     return kanban.tasks.find(t => t.id === selectedTaskId) || null;
@@ -49,18 +52,36 @@ export function KanbanBoard() {
     setSelectedTaskId(null);
   };
 
+  const handleOpenNewTaskDialog = (columnId?: string) => {
+    setNewTaskColumnId(columnId);
+    setShowNewTaskDialog(true);
+  };
+
+  // Task drag handlers
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.stopPropagation();
     setDraggedTaskId(taskId);
+    setDraggedColumnId(null); // Ensure column drag is not active
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `task:${taskId}`);
   };
 
   const handleDragEnd = () => {
     setDraggedTaskId(null);
   };
 
+  // Column drag handlers - completely separate from task drag
   const handleColumnDragStart = (e: React.DragEvent, columnId: string) => {
+    e.stopPropagation();
+    // Only allow column drag if no task is being dragged
+    if (draggedTaskId) {
+      e.preventDefault();
+      return;
+    }
     setDraggedColumnId(columnId);
+    setDraggedTaskId(null); // Ensure task drag is not active
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `column:${columnId}`);
   };
 
   const handleColumnDragEnd = () => {
@@ -69,10 +90,11 @@ export function KanbanBoard() {
 
   const handleColumnDrop = (e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
-    if (draggedColumnId && draggedColumnId !== targetColumnId) {
-      // BUG FIX: Calculate correct target index based on drop position
+    e.stopPropagation();
+    
+    // Only handle column drops, not task drops
+    if (draggedColumnId && draggedColumnId !== targetColumnId && !draggedTaskId) {
       const targetIndex = kanban.columns.findIndex(c => c.id === targetColumnId);
-      // Move to the target position
       kanban.moveColumn(draggedColumnId, targetIndex);
     }
     setDraggedColumnId(null);
@@ -98,13 +120,22 @@ export function KanbanBoard() {
             <Button
               variant="outline"
               size="icon"
+              onClick={() => setShowTagManager(true)}
+              className="border-border"
+              title="Gestionar etiquetas"
+            >
+              <Tag className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
               onClick={() => setIsDark(!isDark)}
               className="border-border"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
             <Button 
-              onClick={() => kanban.addTask(kanban.columns[0]?.id || 'research', { title: 'Nueva tarea' })}
+              onClick={() => handleOpenNewTaskDialog()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-coral"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -190,7 +221,7 @@ export function KanbanBoard() {
                   column={column}
                   tasks={kanban.getTasksByColumn(column.id)}
                   onTaskClick={handleTaskClick}
-                  onAddTask={(task) => kanban.addTask(column.id, task)}
+                  onOpenNewTaskDialog={() => handleOpenNewTaskDialog(column.id)}
                   onUpdateColumn={(updates) => kanban.updateColumn(column.id, updates)}
                   onDeleteColumn={() => kanban.deleteColumn(column.id)}
                   onMoveTask={kanban.moveTask}
@@ -200,7 +231,8 @@ export function KanbanBoard() {
                   onColumnDragStart={(e) => handleColumnDragStart(e, column.id)}
                   onColumnDragEnd={handleColumnDragEnd}
                   onColumnDrop={(e) => handleColumnDrop(e, column.id)}
-                  isDragging={draggedColumnId === column.id}
+                  isDraggingColumn={draggedColumnId === column.id}
+                  isAnyTaskDragging={draggedTaskId !== null}
                 />
               ))}
               
@@ -246,7 +278,7 @@ export function KanbanBoard() {
         )}
       </main>
 
-      {/* Task Detail Panel - BUG FIX: Using derived selectedTask for reactivity */}
+      {/* Task Detail Panel */}
       {selectedTask && selectedTaskId && (
         <TaskDetailPanel
           key={selectedTaskId}
@@ -265,6 +297,26 @@ export function KanbanBoard() {
           onDeleteChecklistItem={(itemId) => kanban.deleteChecklistItem(selectedTaskId, itemId)}
         />
       )}
+
+      {/* New Task Dialog */}
+      <NewTaskDialog
+        open={showNewTaskDialog}
+        onOpenChange={setShowNewTaskDialog}
+        columns={kanban.columns}
+        availableTags={kanban.availableTags}
+        onCreateTask={kanban.addTask}
+        defaultColumnId={newTaskColumnId}
+      />
+
+      {/* Tag Manager */}
+      <TagManager
+        open={showTagManager}
+        onOpenChange={setShowTagManager}
+        tags={kanban.availableTags}
+        onAddTag={kanban.addTag}
+        onUpdateTag={kanban.updateTag}
+        onDeleteTag={kanban.deleteTag}
+      />
     </div>
   );
 }
