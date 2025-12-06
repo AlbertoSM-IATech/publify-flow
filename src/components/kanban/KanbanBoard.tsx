@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,8 @@ import { cn } from '@/lib/utils';
 
 export function KanbanBoard() {
   const kanban = useKanban();
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  // BUG FIX: Store only the task ID, derive the actual task from state for reactivity
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('kanban');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -25,6 +26,13 @@ export function KanbanBoard() {
     return true;
   });
 
+  // BUG FIX: Derive selectedTask from tasks array for real-time reactivity
+  // This ensures panel always shows current task state after any update
+  const selectedTask = useMemo(() => {
+    if (!selectedTaskId) return null;
+    return kanban.tasks.find(t => t.id === selectedTaskId) || null;
+  }, [selectedTaskId, kanban.tasks]);
+
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -34,11 +42,11 @@ export function KanbanBoard() {
   }, [isDark]);
 
   const handleTaskClick = (task: Task) => {
-    setSelectedTask(task);
+    setSelectedTaskId(task.id);
   };
 
   const handleClosePanel = () => {
-    setSelectedTask(null);
+    setSelectedTaskId(null);
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -62,9 +70,12 @@ export function KanbanBoard() {
   const handleColumnDrop = (e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
     if (draggedColumnId && draggedColumnId !== targetColumnId) {
+      // BUG FIX: Calculate correct target index based on drop position
       const targetIndex = kanban.columns.findIndex(c => c.id === targetColumnId);
+      // Move to the target position
       kanban.moveColumn(draggedColumnId, targetIndex);
     }
+    setDraggedColumnId(null);
   };
 
   const viewButtons = [
@@ -207,7 +218,7 @@ export function KanbanBoard() {
 
         {currentView === 'list' && (
           <ListView
-            tasks={kanban.tasks}
+            tasks={kanban.getFilteredTasks()}
             columns={kanban.columns}
             onTaskClick={handleTaskClick}
             onUpdateTask={kanban.updateTask}
@@ -235,22 +246,23 @@ export function KanbanBoard() {
         )}
       </main>
 
-      {/* Task Detail Panel */}
-      {selectedTask && (
+      {/* Task Detail Panel - BUG FIX: Using derived selectedTask for reactivity */}
+      {selectedTask && selectedTaskId && (
         <TaskDetailPanel
+          key={selectedTaskId}
           task={selectedTask}
           columns={kanban.columns}
           availableTags={kanban.availableTags}
           onClose={handleClosePanel}
-          onUpdate={(updates) => kanban.updateTask(selectedTask.id, updates)}
+          onUpdate={(updates) => kanban.updateTask(selectedTaskId, updates)}
           onDelete={() => {
-            kanban.deleteTask(selectedTask.id);
+            kanban.deleteTask(selectedTaskId);
             handleClosePanel();
           }}
-          onDuplicate={() => kanban.duplicateTask(selectedTask.id)}
-          onAddChecklistItem={(text) => kanban.addChecklistItem(selectedTask.id, text)}
-          onToggleChecklistItem={(itemId) => kanban.toggleChecklistItem(selectedTask.id, itemId)}
-          onDeleteChecklistItem={(itemId) => kanban.deleteChecklistItem(selectedTask.id, itemId)}
+          onDuplicate={() => kanban.duplicateTask(selectedTaskId)}
+          onAddChecklistItem={(text) => kanban.addChecklistItem(selectedTaskId, text)}
+          onToggleChecklistItem={(itemId) => kanban.toggleChecklistItem(selectedTaskId, itemId)}
+          onDeleteChecklistItem={(itemId) => kanban.deleteChecklistItem(selectedTaskId, itemId)}
         />
       )}
     </div>

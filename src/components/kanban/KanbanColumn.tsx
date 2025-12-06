@@ -72,8 +72,12 @@ export function KanbanColumn({
   const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   const handleTitleSave = () => {
-    if (editTitle.trim()) {
-      onUpdateColumn({ title: editTitle.trim() });
+    // BUG FIX: Validate title is not empty, revert to original if needed
+    const trimmedTitle = editTitle.trim();
+    if (trimmedTitle) {
+      onUpdateColumn({ title: trimmedTitle });
+    } else {
+      setEditTitle(column.title); // Revert to original
     }
     setIsEditing(false);
   };
@@ -187,14 +191,14 @@ export function KanbanColumn({
         </DropdownMenu>
       </div>
 
-      {/* Tasks */}
+      {/* Tasks - BUG FIX: Added proper key stability and drop handling */}
       <div
         className="flex-1 overflow-y-auto scrollbar-thin space-y-2 min-h-[100px]"
         onDragLeave={handleDragLeave}
       >
         {tasks.map((task, index) => (
-          <div key={task.id}>
-            {dropIndex === index && (
+          <div key={`task-wrapper-${task.id}`}>
+            {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
               <div className="h-1 bg-primary rounded-full mb-2 animate-pulse" />
             )}
             <div
@@ -212,13 +216,13 @@ export function KanbanColumn({
           </div>
         ))}
         
-        {/* Drop zone at the end */}
+        {/* Drop zone at the end - BUG FIX: Only show when actually dragging */}
         <div
-          className="h-20"
+          className={cn("min-h-[60px] rounded-lg transition-colors", draggedTaskId && "bg-muted/30")}
           onDragOver={(e) => handleDragOver(e, tasks.length)}
           onDrop={(e) => handleDrop(e, tasks.length)}
         >
-          {dropIndex === tasks.length && (
+          {dropIndex === tasks.length && draggedTaskId && (
             <div className="h-1 bg-primary rounded-full animate-pulse" />
           )}
         </div>

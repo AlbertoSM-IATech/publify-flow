@@ -201,11 +201,25 @@ export function useKanban() {
       const task = prev.find(t => t.id === taskId);
       if (!task) return prev;
 
+      // BUG FIX: Prevent unnecessary state updates
+      const isInSameColumn = task.columnId === targetColumnId;
+      const currentIndex = prev
+        .filter(t => t.columnId === task.columnId)
+        .sort((a, b) => a.order - b.order)
+        .findIndex(t => t.id === taskId);
+      
+      if (isInSameColumn && currentIndex === targetIndex) {
+        return prev; // No change needed
+      }
+
       const otherTasks = prev.filter(t => t.id !== taskId);
-      const targetColumnTasks = otherTasks.filter(t => t.columnId === targetColumnId);
+      const targetColumnTasks = otherTasks
+        .filter(t => t.columnId === targetColumnId)
+        .sort((a, b) => a.order - b.order);
       
-      const updatedTask = { ...task, columnId: targetColumnId, order: targetIndex };
+      const updatedTask = { ...task, columnId: targetColumnId };
       
+      // BUG FIX: Insert at correct position and reorder
       const reorderedTargetTasks = [
         ...targetColumnTasks.slice(0, targetIndex),
         updatedTask,
@@ -238,9 +252,27 @@ export function useKanban() {
   }, []);
 
   const deleteColumn = useCallback((columnId: string) => {
+    // BUG FIX: Check if column has tasks before deleting
+    // Move tasks to first available column or delete if no other columns exist
+    setTasks(prev => {
+      const tasksInColumn = prev.filter(task => task.columnId === columnId);
+      if (tasksInColumn.length === 0) return prev;
+      
+      // Find first column that isn't being deleted
+      const firstAvailableColumn = columns.find(c => c.id !== columnId);
+      if (firstAvailableColumn) {
+        // Move tasks to first available column
+        return prev.map(task => 
+          task.columnId === columnId 
+            ? { ...task, columnId: firstAvailableColumn.id }
+            : task
+        );
+      }
+      // No other columns, keep tasks orphaned (they'll be deleted with column)
+      return prev.filter(task => task.columnId !== columnId);
+    });
     setColumns(prev => prev.filter(col => col.id !== columnId));
-    setTasks(prev => prev.filter(task => task.columnId !== columnId));
-  }, []);
+  }, [columns]);
 
   const moveColumn = useCallback((columnId: string, targetIndex: number) => {
     setColumns(prev => {

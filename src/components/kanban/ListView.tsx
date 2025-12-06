@@ -1,9 +1,29 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle } from 'lucide-react';
+import { 
+  ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle,
+  Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
+  TrendingUp, Megaphone, Settings, Check, Folder
+} from 'lucide-react';
 import { Task, Column, Priority } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+// BUG FIX: Icon mapping for rendering column icons in list view
+const iconMap: Record<string, React.ReactNode> = {
+  search: <Search className="w-3.5 h-3.5" />,
+  layout: <Layout className="w-3.5 h-3.5" />,
+  'file-text': <FileText className="w-3.5 h-3.5" />,
+  edit: <Edit3 className="w-3.5 h-3.5" />,
+  palette: <Palette className="w-3.5 h-3.5" />,
+  'check-circle': <CheckCircle className="w-3.5 h-3.5" />,
+  upload: <Upload className="w-3.5 h-3.5" />,
+  'trending-up': <TrendingUp className="w-3.5 h-3.5" />,
+  megaphone: <Megaphone className="w-3.5 h-3.5" />,
+  settings: <Settings className="w-3.5 h-3.5" />,
+  check: <Check className="w-3.5 h-3.5" />,
+  folder: <Folder className="w-3.5 h-3.5" />,
+};
 
 interface ListViewProps {
   tasks: Task[];
@@ -126,8 +146,12 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
                   </td>
                   <td className="px-4 py-3">
                     {column && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted">
-                        <span>{column.icon}</span>
+                      <span 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: `${column.color}15`, color: column.color }}
+                      >
+                        {/* BUG FIX: Render icon component instead of string */}
+                        {iconMap[column.icon] || <Folder className="w-3.5 h-3.5" />}
                         {column.title}
                       </span>
                     )}

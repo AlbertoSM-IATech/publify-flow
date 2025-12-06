@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Calendar, Tag, User, Clock, Link2, Trash2, Copy, MoreHorizontal,
-  CheckSquare, Plus, AlertCircle, FileText, MessageSquare
+  CheckSquare, Plus, AlertCircle, FileText, MessageSquare,
+  Search, Layout, Edit3, Palette, CheckCircle, Upload,
+  TrendingUp, Megaphone, Settings, Check, Folder
 } from 'lucide-react';
 import { Task, Column, Tag as TagType, Priority } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,22 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+// BUG FIX: Icon mapping for rendering column icons properly
+const iconMap: Record<string, React.ReactNode> = {
+  search: <Search className="w-4 h-4" />,
+  layout: <Layout className="w-4 h-4" />,
+  'file-text': <FileText className="w-4 h-4" />,
+  edit: <Edit3 className="w-4 h-4" />,
+  palette: <Palette className="w-4 h-4" />,
+  'check-circle': <CheckCircle className="w-4 h-4" />,
+  upload: <Upload className="w-4 h-4" />,
+  'trending-up': <TrendingUp className="w-4 h-4" />,
+  megaphone: <Megaphone className="w-4 h-4" />,
+  settings: <Settings className="w-4 h-4" />,
+  check: <Check className="w-4 h-4" />,
+  folder: <Folder className="w-4 h-4" />,
+};
 
 interface TaskDetailPanelProps {
   task: Task;
@@ -65,14 +83,21 @@ export function TaskDetailPanel({
   
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // BUG FIX: Sync local state when task prop changes (for reactive updates from external changes)
   useEffect(() => {
     setTitle(task.title);
     setDescription(task.description);
-  }, [task]);
+  }, [task.id, task.title, task.description]);
 
   const handleTitleBlur = () => {
-    if (title.trim() && title !== task.title) {
-      onUpdate({ title: title.trim() });
+    // BUG FIX: Validate title is not empty, revert to original if empty
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setTitle(task.title); // Revert to original
+      return;
+    }
+    if (trimmedTitle !== task.title) {
+      onUpdate({ title: trimmedTitle });
     }
   };
 
@@ -121,7 +146,8 @@ export function TaskDetailPanel({
                 {columns.map(col => (
                   <SelectItem key={col.id} value={col.id}>
                     <span className="flex items-center gap-2">
-                      <span>{col.icon}</span>
+                      {/* BUG FIX: Render icon component instead of string */}
+                      <span style={{ color: col.color }}>{iconMap[col.icon] || <Folder className="w-4 h-4" />}</span>
                       {col.title}
                     </span>
                   </SelectItem>
