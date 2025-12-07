@@ -71,7 +71,7 @@ export function KanbanColumn({
   const [editTitle, setEditTitle] = useState(column.title);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const columnRef = useRef<HTMLDivElement>(null);
-  const dragHandleRef = useRef<HTMLDivElement>(null);
+  const tasksContainerRef = useRef<HTMLDivElement>(null);
 
   const handleTitleSave = () => {
     const trimmedTitle = editTitle.trim();
@@ -83,20 +83,48 @@ export function KanbanColumn({
     setIsEditing(false);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  // BUG FIX: Improved drop zone calculation for better positioning
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only handle task drop, not column drop
-    if (draggedTaskId) {
-      setDropIndex(index);
+    
+    // Only handle task drags
+    if (!draggedTaskId) return;
+    
+    e.dataTransfer.dropEffect = 'move';
+    
+    // Calculate drop index based on mouse position
+    const container = tasksContainerRef.current;
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const mouseY = e.clientY - containerRect.top + container.scrollTop;
+    
+    // Find the right index based on mouse Y position
+    let newIndex = tasks.length;
+    const taskElements = container.querySelectorAll('[data-task-id]');
+    
+    for (let i = 0; i < taskElements.length; i++) {
+      const el = taskElements[i] as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      const elTop = rect.top - containerRect.top + container.scrollTop;
+      const elMiddle = elTop + rect.height / 2;
+      
+      if (mouseY < elMiddle) {
+        newIndex = i;
+        break;
+      }
     }
+    
+    setDropIndex(newIndex);
   };
 
-  const handleDrop = (e: React.DragEvent, index: number) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (draggedTaskId) {
-      onMoveTask(draggedTaskId, column.id, index);
+    
+    if (draggedTaskId && dropIndex !== null) {
+      onMoveTask(draggedTaskId, column.id, dropIndex);
     }
     setDropIndex(null);
   };
@@ -117,24 +145,28 @@ export function KanbanColumn({
     }
   };
 
-  // Column drag handlers - only triggered from the grip handle
+  // BUG FIX: Column drag handlers - completely separate from task drag
   const handleColumnDragStart = (e: React.DragEvent) => {
     e.stopPropagation();
+    // Prevent column drag if a task is being dragged
+    if (isAnyTaskDragging) {
+      e.preventDefault();
+      return;
+    }
     onColumnDragStart(e);
   };
 
-  // Handle column drop - only when dragging columns, not tasks
+  // BUG FIX: Only accept column drops when no task is being dragged
   const handleColumnDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    // Only accept column drops when a column is being dragged
-    // and no task is being dragged
-    if (!isAnyTaskDragging) {
+    if (!isAnyTaskDragging && isDraggingColumn === false) {
       e.dataTransfer.dropEffect = 'move';
     }
   };
 
   const handleColumnDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     // Only handle column drops, not task drops
     if (!draggedTaskId) {
       onColumnDrop(e);
@@ -148,27 +180,27 @@ export function KanbanColumn({
     <div
       ref={columnRef}
       className={cn(
-        "kanban-column transition-all duration-200",
-        isDraggingColumn && "opacity-50 scale-95"
+        "kanban-column transition-all duration-200 overflow-hidden",
+        isDraggingColumn && "opacity-50 scale-95 ring-2 ring-primary/50"
       )}
       onDragOver={handleColumnDragOver}
       onDrop={handleColumnDrop}
+      onDragLeave={handleDragLeave}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-3 group">
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           {/* Drag Handle - only this element is draggable for columns */}
           <div
-            ref={dragHandleRef}
             draggable
             onDragStart={handleColumnDragStart}
             onDragEnd={onColumnDragEnd}
-            className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-muted/50 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded hover:bg-muted/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
           >
             <GripVertical className="w-4 h-4 text-muted-foreground" />
           </div>
           <div 
-            className="flex items-center justify-center w-6 h-6 rounded"
+            className="flex items-center justify-center w-6 h-6 rounded flex-shrink-0"
             style={{ backgroundColor: `${column.color}20`, color: column.color }}
           >
             {columnIcon}
@@ -181,14 +213,17 @@ export function KanbanColumn({
               onBlur={handleTitleSave}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleTitleSave();
-                if (e.key === 'Escape') setIsEditing(false);
+                if (e.key === 'Escape') {
+                  setEditTitle(column.title);
+                  setIsEditing(false);
+                }
               }}
               className="h-7 text-sm font-medium"
               autoFocus
             />
           ) : (
             <h3
-              className="font-heading font-semibold text-foreground cursor-pointer hover:text-primary transition-colors text-sm"
+              className="font-heading font-semibold text-foreground cursor-pointer hover:text-primary transition-colors text-sm truncate"
               onClick={() => setIsEditing(true)}
             >
               {column.title}
@@ -196,7 +231,7 @@ export function KanbanColumn({
           )}
           
           <span className={cn(
-            "text-xs font-medium px-2 py-0.5 rounded-full",
+            "text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0",
             isOverWipLimit
               ? "bg-destructive/10 text-destructive"
               : "bg-muted text-muted-foreground"
@@ -208,7 +243,7 @@ export function KanbanColumn({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100">
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 flex-shrink-0">
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -230,51 +265,47 @@ export function KanbanColumn({
         </DropdownMenu>
       </div>
 
-      {/* Tasks Container */}
+      {/* Tasks Container - BUG FIX: No horizontal overflow, proper scrolling */}
       <div
-        className="flex-1 overflow-y-auto scrollbar-thin space-y-2 min-h-[100px]"
+        ref={tasksContainerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin space-y-2 min-h-[100px] pb-2"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         onDragLeave={handleDragLeave}
       >
         {tasks.map((task, index) => (
-          <div key={task.id}>
+          <div key={task.id} data-task-id={task.id} className="relative">
             {/* Drop indicator before this task */}
             {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
-              <div className="h-1 bg-primary rounded-full mb-2 animate-pulse" />
+              <div className="absolute -top-1 left-0 right-0 h-1 bg-primary rounded-full z-10" />
             )}
-            <div
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDrop={(e) => handleDrop(e, index)}
-            >
-              <TaskCard
-                task={task}
-                onClick={() => onTaskClick(task)}
-                onDragStart={(e) => onDragStart(e, task.id)}
-                onDragEnd={onDragEnd}
-                isDragging={draggedTaskId === task.id}
-              />
-            </div>
+            <TaskCard
+              task={task}
+              onClick={() => onTaskClick(task)}
+              onDragStart={(e) => onDragStart(e, task.id)}
+              onDragEnd={onDragEnd}
+              isDragging={draggedTaskId === task.id}
+            />
           </div>
         ))}
         
-        {/* Drop zone at the end */}
-        <div
-          className={cn(
-            "min-h-[60px] rounded-lg transition-colors",
-            draggedTaskId && "bg-muted/30 border-2 border-dashed border-primary/30"
-          )}
-          onDragOver={(e) => handleDragOver(e, tasks.length)}
-          onDrop={(e) => handleDrop(e, tasks.length)}
-        >
-          {dropIndex === tasks.length && draggedTaskId && (
-            <div className="h-1 bg-primary rounded-full animate-pulse" />
-          )}
-        </div>
+        {/* Drop zone at the end - BUG FIX: Better visual indicator */}
+        {draggedTaskId && (
+          <div
+            className={cn(
+              "min-h-[40px] rounded-lg transition-all border-2 border-dashed",
+              dropIndex === tasks.length
+                ? "border-primary bg-primary/10"
+                : "border-muted-foreground/20"
+            )}
+          />
+        )}
       </div>
 
       {/* Add Task Button */}
       <Button
         variant="ghost"
-        className="w-full mt-2 justify-start text-muted-foreground hover:text-foreground"
+        className="w-full mt-2 justify-start text-muted-foreground hover:text-foreground flex-shrink-0"
         onClick={onOpenNewTaskDialog}
       >
         <Plus className="w-4 h-4 mr-2" />

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Filter, SlidersHorizontal, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanban } from '@/hooks/useKanban';
@@ -8,6 +8,7 @@ import { TaskDetailPanel } from './TaskDetailPanel';
 import { FilterPanel } from './FilterPanel';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
+import { TimelineView } from './TimelineView';
 import { NewTaskDialog } from './NewTaskDialog';
 import { TagManager } from './TagManager';
 import { Task, ViewType } from '@/types/kanban';
@@ -30,7 +31,7 @@ export function KanbanBoard() {
     return true;
   });
 
-  // Derive selectedTask from tasks array for real-time reactivity
+  // BUG FIX: Derive selectedTask from tasks array for real-time reactivity
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) return null;
     return kanban.tasks.find(t => t.id === selectedTaskId) || null;
@@ -44,34 +45,32 @@ export function KanbanBoard() {
     }
   }, [isDark]);
 
-  const handleTaskClick = (task: Task) => {
+  const handleTaskClick = useCallback((task: Task) => {
     setSelectedTaskId(task.id);
-  };
+  }, []);
 
-  const handleClosePanel = () => {
+  const handleClosePanel = useCallback(() => {
     setSelectedTaskId(null);
-  };
+  }, []);
 
-  const handleOpenNewTaskDialog = (columnId?: string) => {
+  const handleOpenNewTaskDialog = useCallback((columnId?: string) => {
     setNewTaskColumnId(columnId);
     setShowNewTaskDialog(true);
-  };
+  }, []);
 
-  // Task drag handlers
-  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+  // BUG FIX: Task drag handlers - completely isolated from column drag
+  const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
     e.stopPropagation();
     setDraggedTaskId(taskId);
     setDraggedColumnId(null); // Ensure column drag is not active
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `task:${taskId}`);
-  };
+  }, []);
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     setDraggedTaskId(null);
-  };
+  }, []);
 
-  // Column drag handlers - completely separate from task drag
-  const handleColumnDragStart = (e: React.DragEvent, columnId: string) => {
+  // BUG FIX: Column drag handlers - completely separate from task drag
+  const handleColumnDragStart = useCallback((e: React.DragEvent, columnId: string) => {
     e.stopPropagation();
     // Only allow column drag if no task is being dragged
     if (draggedTaskId) {
@@ -82,13 +81,13 @@ export function KanbanBoard() {
     setDraggedTaskId(null); // Ensure task drag is not active
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', `column:${columnId}`);
-  };
+  }, [draggedTaskId]);
 
-  const handleColumnDragEnd = () => {
+  const handleColumnDragEnd = useCallback(() => {
     setDraggedColumnId(null);
-  };
+  }, []);
 
-  const handleColumnDrop = (e: React.DragEvent, targetColumnId: string) => {
+  const handleColumnDrop = useCallback((e: React.DragEvent, targetColumnId: string) => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -98,7 +97,7 @@ export function KanbanBoard() {
       kanban.moveColumn(draggedColumnId, targetIndex);
     }
     setDraggedColumnId(null);
-  };
+  }, [draggedColumnId, draggedTaskId, kanban]);
 
   const viewButtons = [
     { id: 'kanban' as ViewType, icon: LayoutGrid, label: 'Kanban' },
@@ -108,9 +107,9 @@ export function KanbanBoard() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
+      <header className="border-b border-border px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-heading font-semibold text-foreground">Tareas</h1>
@@ -193,11 +192,6 @@ export function KanbanBoard() {
               </span>
             )}
           </Button>
-
-          {/* Settings */}
-          <Button variant="outline" className="border-border">
-            <SlidersHorizontal className="w-4 h-4" />
-          </Button>
         </div>
 
         {/* Filter Panel */}
@@ -210,10 +204,10 @@ export function KanbanBoard() {
         )}
       </header>
 
-      {/* Main Content */}
+      {/* Main Content - BUG FIX: Prevent overflow issues */}
       <main className="flex-1 overflow-hidden">
         {currentView === 'kanban' && (
-          <div className="h-full overflow-x-auto scrollbar-thin">
+          <div className="h-full overflow-x-auto overflow-y-hidden scrollbar-thin">
             <div className="flex gap-4 p-6 min-w-max h-full">
               {kanban.columns.map(column => (
                 <KanbanColumn
@@ -239,7 +233,7 @@ export function KanbanBoard() {
               {/* Add Column Button */}
               <button
                 onClick={() => kanban.addColumn('Nueva columna')}
-                className="min-w-[300px] h-fit bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 rounded-lg p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-all"
+                className="min-w-[300px] h-fit bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 rounded-lg p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
               >
                 <Plus className="w-5 h-5" />
                 Añadir columna
@@ -261,6 +255,7 @@ export function KanbanBoard() {
           <CalendarView
             tasks={kanban.getFilteredTasks()}
             columns={kanban.columns}
+            availableTags={kanban.availableTags}
             onTaskClick={handleTaskClick}
             onAddTask={kanban.addTask}
             onUpdateTask={kanban.updateTask}
@@ -268,13 +263,12 @@ export function KanbanBoard() {
         )}
 
         {currentView === 'timeline' && (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            <div className="text-center">
-              <GanttChart className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Vista Timeline</p>
-              <p className="text-sm">Próximamente disponible</p>
-            </div>
-          </div>
+          <TimelineView
+            tasks={kanban.getFilteredTasks()}
+            columns={kanban.columns}
+            onTaskClick={handleTaskClick}
+            onUpdateTask={kanban.updateTask}
+          />
         )}
       </main>
 
