@@ -141,21 +141,22 @@
   }
 
   .kanban-column {
-    @apply bg-muted/50 rounded-lg p-3 min-w-[300px] max-w-[320px] flex flex-col;
+    @apply bg-muted/50 rounded-lg p-3 min-w-[300px] max-w-[320px] flex flex-col max-h-[calc(100vh-200px)];
   }
 
   .kanban-card {
     @apply bg-card rounded-lg p-3 border border-border/50 cursor-grab active:cursor-grabbing;
-    @apply transition-all duration-200 ease-out;
+    @apply transition-all duration-150 ease-out;
   }
 
   .kanban-card:hover {
-    @apply border-primary/50 -translate-y-0.5;
+    @apply border-primary/50;
     box-shadow: 0 4px 12px -2px hsl(var(--coral) / 0.15);
   }
 
+  /* BUG FIX: Remove rotation and aggressive transforms that cause visual bugs */
   .kanban-card.dragging {
-    @apply opacity-50 rotate-2 scale-105;
+    @apply opacity-60;
   }
 
   .priority-critical {

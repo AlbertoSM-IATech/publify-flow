@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  X, Calendar, Tag, User, Clock, Link2, Trash2, Copy, MoreHorizontal,
-  CheckSquare, Plus, AlertCircle, FileText, MessageSquare,
+  X, Calendar, Tag, User, Clock, Trash2, Copy, MoreHorizontal,
+  CheckSquare, Plus, AlertCircle, FileText,
   Search, Layout, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder
+  TrendingUp, Megaphone, Settings, Check, Folder, Globe
 } from 'lucide-react';
 import { Task, Column, Tag as TagType, Priority } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -43,6 +42,30 @@ const iconMap: Record<string, React.ReactNode> = {
   check: <Check className="w-4 h-4" />,
   folder: <Folder className="w-4 h-4" />,
 };
+
+// BUG FIX: Complete list of Amazon marketplaces
+const AMAZON_MARKETS = [
+  { value: 'none', label: 'Sin mercado' },
+  { value: '.com', label: 'Amazon.com (US)', region: '🇺🇸' },
+  { value: '.ca', label: 'Amazon.ca (Canadá)', region: '🇨🇦' },
+  { value: '.com.mx', label: 'Amazon.com.mx (México)', region: '🇲🇽' },
+  { value: '.com.br', label: 'Amazon.com.br (Brasil)', region: '🇧🇷' },
+  { value: '.co.uk', label: 'Amazon.co.uk (UK)', region: '🇬🇧' },
+  { value: '.de', label: 'Amazon.de (Alemania)', region: '🇩🇪' },
+  { value: '.fr', label: 'Amazon.fr (Francia)', region: '🇫🇷' },
+  { value: '.es', label: 'Amazon.es (España)', region: '🇪🇸' },
+  { value: '.it', label: 'Amazon.it (Italia)', region: '🇮🇹' },
+  { value: '.nl', label: 'Amazon.nl (Países Bajos)', region: '🇳🇱' },
+  { value: '.se', label: 'Amazon.se (Suecia)', region: '🇸🇪' },
+  { value: '.pl', label: 'Amazon.pl (Polonia)', region: '🇵🇱' },
+  { value: '.com.tr', label: 'Amazon.com.tr (Turquía)', region: '🇹🇷' },
+  { value: '.ae', label: 'Amazon.ae (EAU)', region: '🇦🇪' },
+  { value: '.sa', label: 'Amazon.sa (Arabia Saudí)', region: '🇸🇦' },
+  { value: '.in', label: 'Amazon.in (India)', region: '🇮🇳' },
+  { value: '.co.jp', label: 'Amazon.co.jp (Japón)', region: '🇯🇵' },
+  { value: '.com.au', label: 'Amazon.com.au (Australia)', region: '🇦🇺' },
+  { value: '.sg', label: 'Amazon.sg (Singapur)', region: '🇸🇬' },
+];
 
 interface TaskDetailPanelProps {
   task: Task;
@@ -79,21 +102,28 @@ export function TaskDetailPanel({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [newChecklistItem, setNewChecklistItem] = useState('');
-  const [activeTab, setActiveTab] = useState<'details' | 'activity' | 'comments'>('details');
   
   const panelRef = useRef<HTMLDivElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  // BUG FIX: Sync local state when task prop changes (for reactive updates from external changes)
+  // BUG FIX: Sync local state when task prop changes (for reactive updates)
   useEffect(() => {
     setTitle(task.title);
     setDescription(task.description);
   }, [task.id, task.title, task.description]);
 
+  // BUG FIX: Auto-resize description textarea
+  useEffect(() => {
+    if (descriptionRef.current) {
+      descriptionRef.current.style.height = 'auto';
+      descriptionRef.current.style.height = `${Math.min(descriptionRef.current.scrollHeight, 200)}px`;
+    }
+  }, [description]);
+
   const handleTitleBlur = () => {
-    // BUG FIX: Validate title is not empty, revert to original if empty
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setTitle(task.title); // Revert to original
+      setTitle(task.title);
       return;
     }
     if (trimmedTitle !== task.title) {
@@ -127,13 +157,13 @@ export function TaskDetailPanel({
         onClick={onClose}
       />
       
-      {/* Panel */}
+      {/* Panel - BUG FIX: Single scroll for entire panel, no internal scrollbars */}
       <div
         ref={panelRef}
-        className="fixed right-0 top-0 h-full w-full max-w-2xl bg-card border-l border-border shadow-xl z-50 animate-slide-in-right overflow-hidden flex flex-col"
+        className="fixed right-0 top-0 h-full w-full max-w-2xl bg-card border-l border-border shadow-xl z-50 animate-slide-in-right flex flex-col overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2">
             <Select
               value={task.columnId}
@@ -146,7 +176,6 @@ export function TaskDetailPanel({
                 {columns.map(col => (
                   <SelectItem key={col.id} value={col.id}>
                     <span className="flex items-center gap-2">
-                      {/* BUG FIX: Render icon component instead of string */}
                       <span style={{ color: col.color }}>{iconMap[col.icon] || <Folder className="w-4 h-4" />}</span>
                       {col.title}
                     </span>
@@ -182,7 +211,7 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content - BUG FIX: Single scrollable area for entire panel */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="p-6 space-y-6">
             {/* Title */}
@@ -269,6 +298,32 @@ export function TaskDetailPanel({
               </div>
             </div>
 
+            {/* Market Field - BUG FIX: All Amazon marketplaces */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Globe className="w-4 h-4" />
+                Mercado
+              </label>
+              <Select
+                value={task.relatedMarket || 'none'}
+                onValueChange={(value) => onUpdate({ relatedMarket: value === 'none' ? null : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar mercado" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {AMAZON_MARKETS.map(market => (
+                    <SelectItem key={market.value} value={market.value}>
+                      <span className="flex items-center gap-2">
+                        {market.region && <span>{market.region}</span>}
+                        {market.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Tags */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -307,18 +362,20 @@ export function TaskDetailPanel({
               </div>
             </div>
 
-            {/* Description */}
+            {/* Description - BUG FIX: Auto-growing textarea, no internal scroll */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Descripción
               </label>
-              <Textarea
+              <textarea
+                ref={descriptionRef}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 onBlur={handleDescriptionBlur}
                 placeholder="Añade una descripción..."
-                className="min-h-[120px] resize-none"
+                className="w-full min-h-[80px] max-h-[200px] px-3 py-2 text-sm bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                style={{ overflow: 'hidden' }}
               />
             </div>
 
@@ -387,30 +444,6 @@ export function TaskDetailPanel({
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
-            </div>
-
-            {/* Market Field */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">
-                Mercado
-              </label>
-              <Select
-                value={task.relatedMarket || 'none'}
-                onValueChange={(value) => onUpdate({ relatedMarket: value === 'none' ? null : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin mercado</SelectItem>
-                  <SelectItem value=".com">.com (US)</SelectItem>
-                  <SelectItem value=".es">.es (España)</SelectItem>
-                  <SelectItem value=".co.uk">.co.uk (UK)</SelectItem>
-                  <SelectItem value=".de">.de (Alemania)</SelectItem>
-                  <SelectItem value=".fr">.fr (Francia)</SelectItem>
-                  <SelectItem value=".it">.it (Italia)</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             {/* Metadata */}

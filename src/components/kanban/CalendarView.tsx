@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Task, Priority, Column } from '@/types/kanban';
+import { ChevronLeft, ChevronRight, Plus, Calendar, Globe } from 'lucide-react';
+import { Task, Priority, Column, Tag } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -28,6 +28,7 @@ import { es } from 'date-fns/locale';
 interface CalendarViewProps {
   tasks: Task[];
   columns: Column[];
+  availableTags: Tag[];
   onTaskClick: (task: Task) => void;
   onAddTask: (columnId: string, task: Partial<Task>) => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
@@ -40,7 +41,21 @@ const priorityColors: Record<Priority, string> = {
   low: 'hsl(142 71% 45%)',
 };
 
-export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateTask }: CalendarViewProps) {
+const priorityLabels: Record<Priority, string> = {
+  critical: 'C',
+  high: 'A',
+  medium: 'M',
+  low: 'B',
+};
+
+export function CalendarView({ 
+  tasks, 
+  columns, 
+  availableTags,
+  onTaskClick, 
+  onAddTask, 
+  onUpdateTask 
+}: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -64,8 +79,10 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.stopPropagation();
     setDraggedTaskId(taskId);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `calendar-task:${taskId}`);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -108,9 +125,9 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
   const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   return (
-    <div className="h-full flex flex-col p-6">
+    <div className="h-full flex flex-col p-6 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-shrink-0">
         <h2 className="text-xl font-heading font-semibold text-foreground capitalize">
           {format(currentMonth, "MMMM yyyy", { locale: es })}
         </h2>
@@ -140,9 +157,9 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col">
+      <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden flex flex-col min-h-0">
         {/* Week Days Header */}
-        <div className="grid grid-cols-7 border-b border-border">
+        <div className="grid grid-cols-7 border-b border-border flex-shrink-0">
           {weekDays.map(weekDay => (
             <div
               key={weekDay}
@@ -154,7 +171,7 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
         </div>
 
         {/* Days Grid */}
-        <div className="grid grid-cols-7 flex-1" style={{ gridAutoRows: '1fr' }}>
+        <div className="grid grid-cols-7 flex-1 overflow-y-auto" style={{ gridAutoRows: 'minmax(100px, 1fr)' }}>
           {days.map((date, index) => {
             const dayTasks = getTasksForDate(date);
             const isCurrentMonth = isSameMonth(date, currentMonth);
@@ -164,7 +181,7 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
               <div
                 key={index}
                 className={cn(
-                  "min-h-[100px] border-b border-r border-border p-2 transition-colors",
+                  "border-b border-r border-border p-1.5 transition-colors relative group",
                   !isCurrentMonth && "bg-muted/30",
                   "hover:bg-muted/50"
                 )}
@@ -174,9 +191,9 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
                 <div className="flex items-center justify-between mb-1">
                   <span
                     className={cn(
-                      "text-sm font-medium",
+                      "text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full",
                       !isCurrentMonth && "text-muted-foreground",
-                      isCurrentDay && "w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center"
+                      isCurrentDay && "bg-primary text-primary-foreground"
                     )}
                   >
                     {format(date, 'd')}
@@ -184,15 +201,16 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-5 w-5 p-0 opacity-0 hover:opacity-100 group-hover:opacity-100"
+                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
                     onClick={() => handleDateClick(date)}
                   >
                     <Plus className="w-3 h-3" />
                   </Button>
                 </div>
                 
-                <div className="space-y-1 overflow-y-auto max-h-[80px] scrollbar-thin">
-                  {dayTasks.slice(0, 3).map(task => (
+                {/* Task list with enhanced display */}
+                <div className="space-y-0.5 overflow-y-auto max-h-[calc(100%-24px)] scrollbar-thin">
+                  {dayTasks.map(task => (
                     <button
                       key={task.id}
                       draggable
@@ -200,21 +218,65 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
                       onDragEnd={handleDragEnd}
                       onClick={() => onTaskClick(task)}
                       className={cn(
-                        "w-full text-left px-1.5 py-0.5 rounded text-xs font-medium truncate transition-all",
-                        "hover:opacity-80 cursor-grab active:cursor-grabbing",
-                        draggedTaskId === task.id && "opacity-50"
+                        "w-full text-left px-1.5 py-1 rounded text-xs transition-all",
+                        "hover:ring-1 hover:ring-primary/50 cursor-grab active:cursor-grabbing",
+                        draggedTaskId === task.id && "opacity-50 scale-95"
                       )}
                       style={{
-                        backgroundColor: `${priorityColors[task.priority]}20`,
-                        color: priorityColors[task.priority],
+                        backgroundColor: `${priorityColors[task.priority]}15`,
+                        borderLeft: `3px solid ${priorityColors[task.priority]}`,
                       }}
                     >
-                      {task.title}
+                      {/* Title */}
+                      <div className="font-medium truncate text-foreground">
+                        {task.title}
+                      </div>
+                      
+                      {/* Meta info */}
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        {/* Priority badge */}
+                        <span 
+                          className="text-[10px] font-bold px-1 rounded"
+                          style={{ 
+                            backgroundColor: `${priorityColors[task.priority]}30`,
+                            color: priorityColors[task.priority]
+                          }}
+                        >
+                          {priorityLabels[task.priority]}
+                        </span>
+                        
+                        {/* Market */}
+                        {task.relatedMarket && (
+                          <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded flex items-center gap-0.5">
+                            <Globe className="w-2.5 h-2.5" />
+                            {task.relatedMarket}
+                          </span>
+                        )}
+                        
+                        {/* Tags (first 2) */}
+                        {task.tags.slice(0, 2).map(tag => (
+                          <span
+                            key={tag.id}
+                            className="text-[10px] px-1 rounded"
+                            style={{
+                              backgroundColor: `${tag.color}25`,
+                              color: tag.color,
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {task.tags.length > 2 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            +{task.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
-                  {dayTasks.length > 3 && (
-                    <span className="text-xs text-muted-foreground px-1.5">
-                      +{dayTasks.length - 3} más
+                  {dayTasks.length > 4 && (
+                    <span className="text-[10px] text-muted-foreground px-1.5 block">
+                      +{dayTasks.length - 4} más
                     </span>
                   )}
                 </div>
@@ -228,7 +290,8 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
               Nueva tarea para {selectedDate && format(selectedDate, "d 'de' MMMM", { locale: es })}
             </DialogTitle>
           </DialogHeader>
@@ -247,7 +310,7 @@ export function CalendarView({ tasks, columns, onTaskClick, onAddTask, onUpdateT
               <Button variant="outline" onClick={() => setShowAddDialog(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAddTask}>
+              <Button onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
                 Añadir tarea
               </Button>
             </div>
