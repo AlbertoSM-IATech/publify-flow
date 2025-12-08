@@ -27,6 +27,8 @@ const defaultColumns: Column[] = [
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// BUG FIX: Use current date/time for createdAt and reasonable dueDate
+const now = new Date();
 const sampleTasks: Task[] = [
   {
     id: generateId(),
@@ -35,8 +37,9 @@ const sampleTasks: Task[] = [
     columnId: 'research',
     priority: 'high',
     tags: [defaultTags[0]],
-    dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
+    dueDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
+    startDate: now,
+    createdAt: now,
     assignee: 'Ana García',
     checklist: [
       { id: '1', text: 'Investigación de nicho', completed: true },
@@ -51,6 +54,7 @@ const sampleTasks: Task[] = [
     attachments: [],
     dependencies: [],
     order: 0,
+    isArchived: false,
   },
   {
     id: generateId(),
@@ -59,8 +63,9 @@ const sampleTasks: Task[] = [
     columnId: 'planning',
     priority: 'medium',
     tags: [defaultTags[2]],
-    dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
+    dueDate: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
+    startDate: now,
+    createdAt: now,
     assignee: 'Carlos López',
     checklist: [
       { id: '1', text: 'Definir estructura', completed: true },
@@ -74,6 +79,7 @@ const sampleTasks: Task[] = [
     attachments: [],
     dependencies: [],
     order: 0,
+    isArchived: false,
   },
   {
     id: generateId(),
@@ -82,8 +88,9 @@ const sampleTasks: Task[] = [
     columnId: 'content',
     priority: 'critical',
     tags: [defaultTags[2]],
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
+    dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+    startDate: now,
+    createdAt: now,
     assignee: 'María Sánchez',
     checklist: [
       { id: '1', text: 'Capítulo 1', completed: true },
@@ -99,6 +106,7 @@ const sampleTasks: Task[] = [
     attachments: [],
     dependencies: [],
     order: 0,
+    isArchived: false,
   },
   {
     id: generateId(),
@@ -107,8 +115,9 @@ const sampleTasks: Task[] = [
     columnId: 'design',
     priority: 'high',
     tags: [defaultTags[3]],
-    dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
+    dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+    startDate: now,
+    createdAt: now,
     assignee: 'Pedro Ruiz',
     checklist: [
       { id: '1', text: 'Diseñar portada frontal', completed: true },
@@ -122,6 +131,7 @@ const sampleTasks: Task[] = [
     attachments: [],
     dependencies: [],
     order: 0,
+    isArchived: false,
   },
   {
     id: generateId(),
@@ -130,8 +140,9 @@ const sampleTasks: Task[] = [
     columnId: 'publishing',
     priority: 'high',
     tags: [defaultTags[0], defaultTags[1]],
-    dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
-    createdAt: new Date(),
+    dueDate: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+    startDate: now,
+    createdAt: now,
     assignee: 'Ana García',
     checklist: [
       { id: '1', text: 'Subir manuscrito', completed: false },
@@ -146,6 +157,7 @@ const sampleTasks: Task[] = [
     attachments: [],
     dependencies: [],
     order: 0,
+    isArchived: false,
   },
 ];
 
@@ -159,6 +171,8 @@ export function useKanban() {
     assignee: null,
     dueDate: { from: null, to: null },
     search: '',
+    market: null,
+    showArchived: false,
   });
   const [automations, setAutomations] = useState<Automation[]>([]);
 
@@ -195,7 +209,9 @@ export function useKanban() {
     })));
   }, []);
 
+  // BUG FIX: Use current date/time for new tasks
   const addTask = useCallback((columnId: string, task: Partial<Task>) => {
+    const now = new Date();
     const newTask: Task = {
       id: generateId(),
       title: task.title || 'Nueva tarea',
@@ -204,7 +220,8 @@ export function useKanban() {
       priority: task.priority || 'medium',
       tags: task.tags || [],
       dueDate: task.dueDate || null,
-      createdAt: new Date(),
+      startDate: task.startDate || now,
+      createdAt: now, // Always use current timestamp
       assignee: task.assignee || null,
       checklist: task.checklist || [],
       estimatedTime: task.estimatedTime || null,
@@ -214,6 +231,7 @@ export function useKanban() {
       attachments: task.attachments || [],
       dependencies: task.dependencies || [],
       order: tasks.filter(t => t.columnId === columnId).length,
+      isArchived: false,
     };
     setTasks(prev => [...prev, newTask]);
     return newTask;
@@ -227,6 +245,20 @@ export function useKanban() {
 
   const deleteTask = useCallback((taskId: string) => {
     setTasks(prev => prev.filter(task => task.id !== taskId));
+  }, []);
+
+  // Archive a task
+  const archiveTask = useCallback((taskId: string) => {
+    setTasks(prev => prev.map(task => 
+      task.id === taskId ? { ...task, isArchived: true } : task
+    ));
+  }, []);
+
+  // Unarchive a task
+  const unarchiveTask = useCallback((taskId: string) => {
+    setTasks(prev => prev.map(task => 
+      task.id === taskId ? { ...task, isArchived: false } : task
+    ));
   }, []);
 
   const moveTask = useCallback((taskId: string, targetColumnId: string, targetIndex: number) => {
@@ -323,8 +355,13 @@ export function useKanban() {
     });
   }, []);
 
+  // BUG FIX: Include market filter and archived filter
   const getFilteredTasks = useCallback(() => {
     return tasks.filter(task => {
+      // Filter out archived tasks unless showArchived is true
+      if (task.isArchived && !filter.showArchived) {
+        return false;
+      }
       if (filter.priority.length > 0 && !filter.priority.includes(task.priority)) {
         return false;
       }
@@ -337,13 +374,22 @@ export function useKanban() {
       if (filter.search && !task.title.toLowerCase().includes(filter.search.toLowerCase())) {
         return false;
       }
+      // Market filter
+      if (filter.market && task.relatedMarket !== filter.market) {
+        return false;
+      }
       return true;
     });
   }, [tasks, filter]);
 
+  // Get archived tasks only
+  const getArchivedTasks = useCallback(() => {
+    return tasks.filter(task => task.isArchived);
+  }, [tasks]);
+
   const getTasksByColumn = useCallback((columnId: string) => {
     return getFilteredTasks()
-      .filter(task => task.columnId === columnId)
+      .filter(task => task.columnId === columnId && !task.isArchived)
       .sort((a, b) => a.order - b.order);
   }, [getFilteredTasks]);
 
@@ -351,12 +397,14 @@ export function useKanban() {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    const now = new Date();
     const newTask: Task = {
       ...task,
       id: generateId(),
       title: `${task.title} (copia)`,
-      createdAt: new Date(),
+      createdAt: now,
       order: tasks.filter(t => t.columnId === task.columnId).length,
+      isArchived: false,
     };
     setTasks(prev => [...prev, newTask]);
   }, [tasks]);
@@ -393,6 +441,24 @@ export function useKanban() {
     }));
   }, []);
 
+  // Get unique assignees for filtering
+  const getUniqueAssignees = useCallback(() => {
+    const assignees = new Set<string>();
+    tasks.forEach(task => {
+      if (task.assignee) assignees.add(task.assignee);
+    });
+    return Array.from(assignees);
+  }, [tasks]);
+
+  // Get unique markets for filtering
+  const getUniqueMarkets = useCallback(() => {
+    const markets = new Set<string>();
+    tasks.forEach(task => {
+      if (task.relatedMarket) markets.add(task.relatedMarket);
+    });
+    return Array.from(markets);
+  }, [tasks]);
+
   return {
     tasks,
     columns: columns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
@@ -404,6 +470,8 @@ export function useKanban() {
     addTask,
     updateTask,
     deleteTask,
+    archiveTask,
+    unarchiveTask,
     moveTask,
     addColumn,
     updateColumn,
@@ -415,6 +483,9 @@ export function useKanban() {
     toggleChecklistItem,
     deleteChecklistItem,
     getFilteredTasks,
+    getArchivedTasks,
+    getUniqueAssignees,
+    getUniqueMarkets,
     addTag,
     updateTag,
     deleteTag,

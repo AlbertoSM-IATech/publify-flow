@@ -176,16 +176,31 @@ export function KanbanColumn({
   const isOverWipLimit = column.wipLimit !== null && tasks.length >= column.wipLimit;
   const columnIcon = iconMap[column.icon] || <Folder className="w-4 h-4" />;
 
+  // Visual indicator for column drop target
+  const [isColumnDropTarget, setIsColumnDropTarget] = useState(false);
+
   return (
     <div
       ref={columnRef}
       className={cn(
-        "kanban-column transition-all duration-200 overflow-hidden",
-        isDraggingColumn && "opacity-50 scale-95 ring-2 ring-primary/50"
+        "kanban-column transition-all duration-200 overflow-hidden relative",
+        isDraggingColumn && "opacity-50 scale-95 ring-2 ring-primary/50",
+        isColumnDropTarget && !isDraggingColumn && !isAnyTaskDragging && "ring-2 ring-primary/50"
       )}
-      onDragOver={handleColumnDragOver}
-      onDrop={handleColumnDrop}
-      onDragLeave={handleDragLeave}
+      onDragOver={(e) => {
+        handleColumnDragOver(e);
+        if (!isAnyTaskDragging && !isDraggingColumn) {
+          setIsColumnDropTarget(true);
+        }
+      }}
+      onDrop={(e) => {
+        handleColumnDrop(e);
+        setIsColumnDropTarget(false);
+      }}
+      onDragLeave={(e) => {
+        handleDragLeave(e);
+        setIsColumnDropTarget(false);
+      }}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-3 group">

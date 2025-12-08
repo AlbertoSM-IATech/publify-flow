@@ -21,6 +21,7 @@ export interface Task {
   priority: Priority;
   tags: Tag[];
   dueDate: Date | null;
+  startDate: Date | null; // For timeline view
   createdAt: Date;
   assignee: string | null;
   checklist: ChecklistItem[];
@@ -31,6 +32,7 @@ export interface Task {
   attachments: string[];
   dependencies: string[];
   order: number;
+  isArchived: boolean; // Archive functionality
 }
 
 export interface Column {
@@ -49,6 +51,8 @@ export interface Filter {
   assignee: string | null;
   dueDate: { from: Date | null; to: Date | null };
   search: string;
+  market: string | null; // Market filter
+  showArchived: boolean; // Archive filter
 }
 
 export interface Automation {

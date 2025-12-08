@@ -286,6 +286,14 @@ export function KanbanBoard() {
             handleClosePanel();
           }}
           onDuplicate={() => kanban.duplicateTask(selectedTaskId)}
+          onArchive={() => {
+            if (selectedTask?.isArchived) {
+              kanban.unarchiveTask(selectedTaskId);
+            } else {
+              kanban.archiveTask(selectedTaskId);
+              handleClosePanel();
+            }
+          }}
           onAddChecklistItem={(text) => kanban.addChecklistItem(selectedTaskId, text)}
           onToggleChecklistItem={(itemId) => kanban.toggleChecklistItem(selectedTaskId, itemId)}
           onDeleteChecklistItem={(itemId) => kanban.deleteChecklistItem(selectedTaskId, itemId)}
