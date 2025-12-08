@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar, Globe } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar, Globe, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Task, Priority, Column, Tag } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
   format,
@@ -19,9 +26,14 @@ import {
   addDays,
   addMonths,
   subMonths,
+  addYears,
+  subYears,
+  setMonth,
+  setYear,
   isSameMonth,
   isSameDay,
   isToday,
+  getYear,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -47,6 +59,11 @@ const priorityLabels: Record<Priority, string> = {
   medium: 'M',
   low: 'B',
 };
+
+const MONTHS = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
 
 export function CalendarView({ 
   tasks, 
@@ -74,8 +91,10 @@ export function CalendarView({
     day = addDays(day, 1);
   }
 
+  // Filter out archived tasks and get tasks for a specific date
   const getTasksForDate = (date: Date) => {
-    return tasks.filter(task => task.dueDate && isSameDay(new Date(task.dueDate), date));
+    return tasks
+      .filter(task => !task.isArchived && task.dueDate && isSameDay(new Date(task.dueDate), date));
   };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -114,6 +133,7 @@ export function CalendarView({
         onAddTask(firstColumn.id, {
           title: newTaskTitle.trim(),
           dueDate: selectedDate,
+          startDate: new Date(),
         });
       }
       setNewTaskTitle('');
@@ -122,19 +142,74 @@ export function CalendarView({
     }
   };
 
+  // Month selector handler
+  const handleMonthChange = (monthIndex: string) => {
+    setCurrentMonth(setMonth(currentMonth, parseInt(monthIndex)));
+  };
+
+  // Year selector handler
+  const handleYearChange = (year: string) => {
+    setCurrentMonth(setYear(currentMonth, parseInt(year)));
+  };
+
+  // Generate year options (current year ± 10 years)
+  const currentYear = getYear(new Date());
+  const yearOptions = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
+
   const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   return (
     <div className="h-full flex flex-col p-6 overflow-hidden">
-      {/* Header */}
+      {/* Header with Month/Year Selectors */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
-        <h2 className="text-xl font-heading font-semibold text-foreground capitalize">
-          {format(currentMonth, "MMMM yyyy", { locale: es })}
-        </h2>
+        <div className="flex items-center gap-3">
+          {/* Month Selector */}
+          <Select 
+            value={currentMonth.getMonth().toString()} 
+            onValueChange={handleMonthChange}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTHS.map((month, index) => (
+                <SelectItem key={month} value={index.toString()}>
+                  {month}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Year Selector */}
+          <Select 
+            value={getYear(currentMonth).toString()} 
+            onValueChange={handleYearChange}
+          >
+            <SelectTrigger className="w-[100px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {yearOptions.map(year => (
+                <SelectItem key={year} value={year.toString()}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            onClick={() => setCurrentMonth(subYears(currentMonth, 1))}
+            title="Año anterior"
+          >
+            <ChevronsLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
           >
             <ChevronLeft className="w-4 h-4" />
@@ -148,10 +223,18 @@ export function CalendarView({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
           >
             <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setCurrentMonth(addYears(currentMonth, 1))}
+            title="Año siguiente"
+          >
+            <ChevronsRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -292,7 +375,7 @@ export function CalendarView({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="w-5 h-5" />
-              Nueva tarea para {selectedDate && format(selectedDate, "d 'de' MMMM", { locale: es })}
+              Nueva tarea para {selectedDate && format(selectedDate, "d 'de' MMMM yyyy", { locale: es })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">

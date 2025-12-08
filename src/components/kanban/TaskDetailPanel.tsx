@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Calendar, Tag, User, Clock, Trash2, Copy, MoreHorizontal,
-  CheckSquare, Plus, AlertCircle, FileText,
+  CheckSquare, Plus, AlertCircle, FileText, Archive,
   Search, Layout, Edit3, Palette, CheckCircle, Upload,
   TrendingUp, Megaphone, Settings, Check, Folder, Globe
 } from 'lucide-react';
@@ -75,6 +75,7 @@ interface TaskDetailPanelProps {
   onUpdate: (updates: Partial<Task>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onArchive: () => void;
   onAddChecklistItem: (text: string) => void;
   onToggleChecklistItem: (itemId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
@@ -95,6 +96,7 @@ export function TaskDetailPanel({
   onUpdate,
   onDelete,
   onDuplicate,
+  onArchive,
   onAddChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
@@ -196,6 +198,10 @@ export function TaskDetailPanel({
                 <DropdownMenuItem onClick={onDuplicate}>
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onArchive}>
+                  <Archive className="w-4 h-4 mr-2" />
+                  {task.isArchived ? 'Desarchivar' : 'Archivar'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onDelete} className="text-destructive">
