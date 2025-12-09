@@ -1,5 +1,6 @@
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
-export type ViewType = 'kanban' | 'list' | 'calendar' | 'timeline';
+export type TaskStatus = 'not_started' | 'in_progress' | 'paused' | 'waiting' | 'archived' | 'completed';
+export type ViewType = 'kanban' | 'list' | 'calendar' | 'timeline' | 'notes';
 
 export interface ChecklistItem {
   id: string;
@@ -19,9 +20,10 @@ export interface Task {
   description: string;
   columnId: string;
   priority: Priority;
+  status: TaskStatus;
   tags: Tag[];
   dueDate: Date | null;
-  startDate: Date | null; // For timeline view
+  startDate: Date | null;
   createdAt: Date;
   assignee: string | null;
   checklist: ChecklistItem[];
@@ -32,7 +34,7 @@ export interface Task {
   attachments: string[];
   dependencies: string[];
   order: number;
-  isArchived: boolean; // Archive functionality
+  isArchived: boolean;
 }
 
 export interface Column {
@@ -51,8 +53,18 @@ export interface Filter {
   assignee: string | null;
   dueDate: { from: Date | null; to: Date | null };
   search: string;
-  market: string | null; // Market filter
-  showArchived: boolean; // Archive filter
+  market: string | null;
+  showArchived: boolean;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  shortDescription: string;
+  content: string;
+  priority: Priority;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Automation {
