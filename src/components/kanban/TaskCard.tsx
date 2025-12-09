@@ -58,13 +58,14 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
     <div
       ref={cardRef}
       className={cn(
-        "kanban-card animate-fade-in select-none",
-        isDragging && "opacity-50 scale-[1.02] shadow-lg ring-2 ring-primary/50"
+        "kanban-card select-none transition-transform duration-150",
+        isDragging && "opacity-40 scale-100 pointer-events-none"
       )}
       onClick={onClick}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      style={{ transform: isDragging ? 'none' : undefined }}
     >
       {/* Drag Handle - visual indicator */}
       <div className="flex items-center gap-2 mb-2 -mt-1">

@@ -83,7 +83,7 @@ export function KanbanColumn({
     setIsEditing(false);
   };
 
-  // BUG FIX: Improved drop zone calculation for better positioning
+  // Improved drop zone calculation - position above or below based on mouse position
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -93,24 +93,22 @@ export function KanbanColumn({
     
     e.dataTransfer.dropEffect = 'move';
     
-    // Calculate drop index based on mouse position
     const container = tasksContainerRef.current;
     if (!container) return;
     
-    const containerRect = container.getBoundingClientRect();
-    const mouseY = e.clientY - containerRect.top + container.scrollTop;
+    const mouseY = e.clientY;
     
-    // Find the right index based on mouse Y position
+    // Find the correct index based on mouse Y relative to each card's center
     let newIndex = tasks.length;
     const taskElements = container.querySelectorAll('[data-task-id]');
     
     for (let i = 0; i < taskElements.length; i++) {
       const el = taskElements[i] as HTMLElement;
       const rect = el.getBoundingClientRect();
-      const elTop = rect.top - containerRect.top + container.scrollTop;
-      const elMiddle = elTop + rect.height / 2;
+      const cardCenter = rect.top + rect.height / 2;
       
-      if (mouseY < elMiddle) {
+      // If mouse is above the center of this card, insert before it
+      if (mouseY < cardCenter) {
         newIndex = i;
         break;
       }
@@ -280,19 +278,19 @@ export function KanbanColumn({
         </DropdownMenu>
       </div>
 
-      {/* Tasks Container - BUG FIX: No horizontal overflow, proper scrolling */}
+      {/* Tasks Container */}
       <div
         ref={tasksContainerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin space-y-2 min-h-[100px] pb-2"
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin min-h-[100px] pb-2"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onDragLeave={handleDragLeave}
       >
         {tasks.map((task, index) => (
-          <div key={task.id} data-task-id={task.id} className="relative">
-            {/* Drop indicator before this task */}
+          <div key={task.id} data-task-id={task.id} className="relative py-1">
+            {/* Drop indicator BEFORE this task */}
             {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
-              <div className="absolute -top-1 left-0 right-0 h-1 bg-primary rounded-full z-10" />
+              <div className="absolute -top-0.5 left-0 right-0 h-1 bg-primary rounded-full z-20 shadow-[0_0_8px_hsl(var(--primary))]" />
             )}
             <TaskCard
               task={task}
@@ -304,14 +302,14 @@ export function KanbanColumn({
           </div>
         ))}
         
-        {/* Drop zone at the end - BUG FIX: Better visual indicator */}
+        {/* Drop zone at the end */}
         {draggedTaskId && (
           <div
             className={cn(
-              "min-h-[40px] rounded-lg transition-all border-2 border-dashed",
+              "min-h-[48px] rounded-lg transition-all border-2 border-dashed mt-1",
               dropIndex === tasks.length
                 ? "border-primary bg-primary/10"
-                : "border-muted-foreground/20"
+                : "border-muted-foreground/30"
             )}
           />
         )}
