@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanban } from '@/hooks/useKanban';
@@ -9,6 +9,7 @@ import { FilterPanel } from './FilterPanel';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
 import { TimelineView } from './TimelineView';
+import { NotesView } from './NotesView';
 import { NewTaskDialog } from './NewTaskDialog';
 import { TagManager } from './TagManager';
 import { Task, ViewType } from '@/types/kanban';
@@ -104,6 +105,7 @@ export function KanbanBoard() {
     { id: 'list' as ViewType, icon: List, label: 'Lista' },
     { id: 'calendar' as ViewType, icon: Calendar, label: 'Calendario' },
     { id: 'timeline' as ViewType, icon: GanttChart, label: 'Timeline' },
+    { id: 'notes' as ViewType, icon: FileText, label: 'Notas' },
   ];
 
   return (
@@ -268,6 +270,15 @@ export function KanbanBoard() {
             columns={kanban.columns}
             onTaskClick={handleTaskClick}
             onUpdateTask={kanban.updateTask}
+          />
+        )}
+
+        {currentView === 'notes' && (
+          <NotesView
+            notes={kanban.notes}
+            onAddNote={kanban.addNote}
+            onUpdateNote={kanban.updateNote}
+            onDeleteNote={kanban.deleteNote}
           />
         )}
       </main>

@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { 
-  ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle,
+  ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle, Globe, Circle,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
   TrendingUp, Megaphone, Settings, Check, Folder, GripVertical
 } from 'lucide-react';
-import { Task, Column, Priority } from '@/types/kanban';
+import { Task, Column, Priority, TaskStatus } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -32,7 +32,7 @@ interface ListViewProps {
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
 }
 
-type SortField = 'title' | 'priority' | 'dueDate' | 'createdAt' | 'status' | 'assignee';
+type SortField = 'title' | 'priority' | 'dueDate' | 'createdAt' | 'status' | 'assignee' | 'market' | 'taskStatus';
 type SortDirection = 'asc' | 'desc';
 
 const priorityOrder: Record<Priority, number> = {
@@ -49,14 +49,25 @@ const priorityConfig: Record<Priority, { label: string; color: string }> = {
   low: { label: 'Baja', color: '#22C55E' },
 };
 
+const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
+  not_started: { label: 'Sin empezar', color: '#6B7280' },
+  in_progress: { label: 'En curso', color: '#3B82F6' },
+  paused: { label: 'Pausado', color: '#F59E0B' },
+  waiting: { label: 'En espera', color: '#8B5CF6' },
+  archived: { label: 'Archivado', color: '#6B7280' },
+  completed: { label: 'Terminado', color: '#22C55E' },
+};
+
 // Default column widths
 const DEFAULT_WIDTHS = {
-  title: 250,
-  status: 150,
-  priority: 100,
-  dueDate: 130,
-  assignee: 150,
-  tags: 180,
+  title: 220,
+  taskStatus: 110,
+  status: 130,
+  priority: 90,
+  dueDate: 110,
+  assignee: 130,
+  market: 80,
+  tags: 150,
 };
 
 export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListViewProps) {
@@ -106,6 +117,14 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
         const assigneeB = b.assignee || '';
         comparison = assigneeA.localeCompare(assigneeB);
         break;
+      case 'market':
+        const marketA = a.relatedMarket || '';
+        const marketB = b.relatedMarket || '';
+        comparison = marketA.localeCompare(marketB);
+        break;
+      case 'taskStatus':
+        comparison = (a.status || 'not_started').localeCompare(b.status || 'not_started');
+        break;
     }
     
     return sortDirection === 'asc' ? comparison : -comparison;
@@ -125,7 +144,7 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
     if (!resizing) return;
     
     const deltaX = e.clientX - resizing.startX;
-    const newWidth = Math.max(80, resizing.startWidth + deltaX);
+    const newWidth = Math.max(60, resizing.startWidth + deltaX);
     
     setColumnWidths(prev => ({
       ...prev,
@@ -138,7 +157,7 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
   }, []);
 
   // Add event listeners for resize
-  useState(() => {
+  useEffect(() => {
     if (resizing) {
       window.addEventListener('mousemove', handleResizeMove);
       window.addEventListener('mouseup', handleResizeEnd);
@@ -147,7 +166,7 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
         window.removeEventListener('mouseup', handleResizeEnd);
       };
     }
-  });
+  }, [resizing, handleResizeMove, handleResizeEnd]);
 
   const SortHeader = ({ 
     field, 

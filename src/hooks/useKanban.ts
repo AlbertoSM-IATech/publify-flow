@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Task, Column, Filter, Priority, Tag, ChecklistItem, Automation } from '@/types/kanban';
+import { Task, Column, Filter, Priority, Tag, ChecklistItem, Automation, TaskStatus, Note } from '@/types/kanban';
 
 const defaultTags: Tag[] = [
   { id: '1', name: 'KDP', color: '#3B82F6' },
@@ -27,7 +27,6 @@ const defaultColumns: Column[] = [
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// BUG FIX: Use current date/time for createdAt and reasonable dueDate
 const now = new Date();
 const sampleTasks: Task[] = [
   {
@@ -36,6 +35,7 @@ const sampleTasks: Task[] = [
     description: 'Análisis de competencia y demanda en Amazon.com',
     columnId: 'research',
     priority: 'high',
+    status: 'in_progress',
     tags: [defaultTags[0]],
     dueDate: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000),
     startDate: now,
@@ -62,6 +62,7 @@ const sampleTasks: Task[] = [
     description: 'Estructura y TOC para libro de recetas veganas',
     columnId: 'planning',
     priority: 'medium',
+    status: 'not_started',
     tags: [defaultTags[2]],
     dueDate: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
     startDate: now,
@@ -87,6 +88,7 @@ const sampleTasks: Task[] = [
     description: 'Escribir los primeros capítulos del manuscrito',
     columnId: 'content',
     priority: 'critical',
+    status: 'in_progress',
     tags: [defaultTags[2]],
     dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
     startDate: now,
@@ -114,6 +116,7 @@ const sampleTasks: Task[] = [
     description: 'Crear diseño de portada front + spine + back',
     columnId: 'design',
     priority: 'high',
+    status: 'paused',
     tags: [defaultTags[3]],
     dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
     startDate: now,
@@ -139,6 +142,7 @@ const sampleTasks: Task[] = [
     description: 'Configurar metadata y subir archivos',
     columnId: 'publishing',
     priority: 'high',
+    status: 'waiting',
     tags: [defaultTags[0], defaultTags[1]],
     dueDate: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
     startDate: now,
@@ -158,6 +162,27 @@ const sampleTasks: Task[] = [
     dependencies: [],
     order: 0,
     isArchived: false,
+  },
+];
+
+const sampleNotes: Note[] = [
+  {
+    id: generateId(),
+    title: 'Ideas para nuevo nicho',
+    shortDescription: 'Posibles nichos de libros para explorar en Q1 2025',
+    content: '## Nichos potenciales\n\n- Libros de colorear para adultos (mandala)\n- Journals de gratitud\n- Planners semanales\n- Libros de actividades para niños\n\n### Prioridad alta\n- Coloring books temáticos (temporadas)',
+    priority: 'high',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: generateId(),
+    title: 'Keywords de competencia',
+    shortDescription: 'Lista de keywords de competidores en Amazon.com',
+    content: 'Keywords principales:\n- adult coloring book\n- stress relief coloring\n- mindfulness coloring\n\nKeywords secundarias:\n- anxiety relief\n- relaxation coloring',
+    priority: 'medium',
+    createdAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
   },
 ];
 
@@ -209,7 +234,35 @@ export function useKanban() {
     })));
   }, []);
 
-  // BUG FIX: Use current date/time for new tasks
+  // Notes management
+  const [notes, setNotes] = useState<Note[]>(sampleNotes);
+
+  const addNote = useCallback((note: Partial<Note>) => {
+    const now = new Date();
+    const newNote: Note = {
+      id: generateId(),
+      title: note.title || 'Nueva nota',
+      shortDescription: note.shortDescription || '',
+      content: note.content || '',
+      priority: note.priority || 'medium',
+      createdAt: now,
+      updatedAt: now,
+    };
+    setNotes(prev => [...prev, newNote]);
+    return newNote;
+  }, []);
+
+  const updateNote = useCallback((noteId: string, updates: Partial<Note>) => {
+    setNotes(prev => prev.map(note =>
+      note.id === noteId ? { ...note, ...updates, updatedAt: new Date() } : note
+    ));
+  }, []);
+
+  const deleteNote = useCallback((noteId: string) => {
+    setNotes(prev => prev.filter(note => note.id !== noteId));
+  }, []);
+
+  // Use current date/time for new tasks
   const addTask = useCallback((columnId: string, task: Partial<Task>) => {
     const now = new Date();
     const newTask: Task = {
@@ -218,10 +271,11 @@ export function useKanban() {
       description: task.description || '',
       columnId,
       priority: task.priority || 'medium',
+      status: task.status || 'not_started',
       tags: task.tags || [],
       dueDate: task.dueDate || null,
       startDate: task.startDate || now,
-      createdAt: now, // Always use current timestamp
+      createdAt: now,
       assignee: task.assignee || null,
       checklist: task.checklist || [],
       estimatedTime: task.estimatedTime || null,
@@ -489,5 +543,9 @@ export function useKanban() {
     addTag,
     updateTag,
     deleteTag,
+    notes,
+    addNote,
+    updateNote,
+    deleteNote,
   };
 }
