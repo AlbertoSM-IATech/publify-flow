@@ -41,7 +41,8 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
   const handleDragStart = (e: React.DragEvent) => {
     e.stopPropagation();
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `task:${task.id}`);
+    e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.setData('application/x-task-id', task.id);
     
     // Create custom drag image
     if (cardRef.current) {
@@ -49,10 +50,8 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
       e.dataTransfer.setDragImage(cardRef.current, rect.width / 2, 20);
     }
     
-    // Small delay to ensure the drag image is set before calling parent
-    requestAnimationFrame(() => {
-      onDragStart(e);
-    });
+    // Call parent immediately to set draggedTaskId state
+    onDragStart(e);
   };
 
   const handleDragEnd = (e: React.DragEvent) => {

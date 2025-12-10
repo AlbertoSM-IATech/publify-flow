@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   X, Calendar, Tag, User, Clock, Trash2, Copy, MoreHorizontal,
-  CheckSquare, Plus, AlertCircle, FileText, Archive,
+  CheckSquare, Plus, AlertCircle, FileText, Archive, Circle,
   Search, Layout, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, Globe
+  TrendingUp, Megaphone, Settings, Check, Folder, Globe, GripVertical
 } from 'lucide-react';
-import { Task, Column, Tag as TagType, Priority } from '@/types/kanban';
+import { Task, Column, Tag as TagType, Priority, TaskStatus } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// BUG FIX: Icon mapping for rendering column icons properly
 const iconMap: Record<string, React.ReactNode> = {
   search: <Search className="w-4 h-4" />,
   layout: <Layout className="w-4 h-4" />,
@@ -43,7 +42,6 @@ const iconMap: Record<string, React.ReactNode> = {
   folder: <Folder className="w-4 h-4" />,
 };
 
-// BUG FIX: Complete list of Amazon marketplaces
 const AMAZON_MARKETS = [
   { value: 'none', label: 'Sin mercado' },
   { value: '.com', label: 'Amazon.com (US)', region: '🇺🇸' },
@@ -67,6 +65,22 @@ const AMAZON_MARKETS = [
   { value: '.sg', label: 'Amazon.sg (Singapur)', region: '🇸🇬' },
 ];
 
+const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
+  { value: 'not_started', label: 'Sin empezar', color: '#6B7280' },
+  { value: 'in_progress', label: 'En curso', color: '#3B82F6' },
+  { value: 'paused', label: 'Pausado', color: '#F59E0B' },
+  { value: 'waiting', label: 'En espera', color: '#8B5CF6' },
+  { value: 'completed', label: 'Terminado', color: '#22C55E' },
+  { value: 'archived', label: 'Archivado', color: '#6B7280' },
+];
+
+const priorityOptions: { value: Priority; label: string; color: string }[] = [
+  { value: 'critical', label: 'Crítica', color: '#EF4444' },
+  { value: 'high', label: 'Alta', color: '#FB923C' },
+  { value: 'medium', label: 'Media', color: '#F59E0B' },
+  { value: 'low', label: 'Baja', color: '#22C55E' },
+];
+
 interface TaskDetailPanelProps {
   task: Task;
   columns: Column[];
@@ -81,12 +95,9 @@ interface TaskDetailPanelProps {
   onDeleteChecklistItem: (itemId: string) => void;
 }
 
-const priorityOptions: { value: Priority; label: string; color: string }[] = [
-  { value: 'critical', label: 'Crítica', color: '#EF4444' },
-  { value: 'high', label: 'Alta', color: '#FB923C' },
-  { value: 'medium', label: 'Media', color: '#F59E0B' },
-  { value: 'low', label: 'Baja', color: '#22C55E' },
-];
+const MIN_PANEL_WIDTH = 400;
+const MAX_PANEL_WIDTH = 900;
+const DEFAULT_PANEL_WIDTH = 640;
 
 export function TaskDetailPanel({
   task,
@@ -104,23 +115,50 @@ export function TaskDetailPanel({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
   
   const panelRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  // BUG FIX: Sync local state when task prop changes (for reactive updates)
   useEffect(() => {
     setTitle(task.title);
     setDescription(task.description);
   }, [task.id, task.title, task.description]);
 
-  // BUG FIX: Auto-resize description textarea
   useEffect(() => {
     if (descriptionRef.current) {
       descriptionRef.current.style.height = 'auto';
       descriptionRef.current.style.height = `${Math.min(descriptionRef.current.scrollHeight, 200)}px`;
     }
   }, [description]);
+
+  // Resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      setPanelWidth(Math.min(Math.max(newWidth, MIN_PANEL_WIDTH), MAX_PANEL_WIDTH));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   const handleTitleBlur = () => {
     const trimmedTitle = title.trim();
@@ -146,10 +184,21 @@ export function TaskDetailPanel({
     }
   };
 
+  const handleStatusChange = (newStatus: TaskStatus) => {
+    onUpdate({ status: newStatus });
+    if (newStatus === 'archived') {
+      onUpdate({ isArchived: true, status: newStatus });
+    } else if (task.isArchived) {
+      onUpdate({ isArchived: false, status: newStatus });
+    }
+  };
+
   const completedChecklist = task.checklist.filter(item => item.completed).length;
   const checklistProgress = task.checklist.length > 0 
     ? (completedChecklist / task.checklist.length) * 100 
     : 0;
+
+  const currentStatus = statusOptions.find(s => s.value === task.status) || statusOptions[0];
 
   return (
     <>
@@ -159,11 +208,29 @@ export function TaskDetailPanel({
         onClick={onClose}
       />
       
-      {/* Panel - BUG FIX: Single scroll for entire panel, no internal scrollbars */}
+      {/* Panel */}
       <div
         ref={panelRef}
-        className="fixed right-0 top-0 h-full w-full max-w-2xl bg-card border-l border-border shadow-xl z-50 animate-slide-in-right flex flex-col overflow-hidden"
+        className="fixed right-0 top-0 h-full bg-card border-l border-border shadow-xl z-50 animate-slide-in-right flex flex-col overflow-hidden"
+        style={{ width: `${panelWidth}px` }}
       >
+        {/* Resize Handle */}
+        <div
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-10 group",
+            "hover:bg-primary/50 transition-colors",
+            isResizing && "bg-primary"
+          )}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+        >
+          <div className="absolute left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <GripVertical className="w-3 h-3 text-muted-foreground" />
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -217,7 +284,7 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        {/* Content - BUG FIX: Single scrollable area for entire panel */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="p-6 space-y-6">
             {/* Title */}
@@ -229,6 +296,43 @@ export function TaskDetailPanel({
                 className="text-xl font-heading font-semibold border-none bg-transparent px-0 focus-visible:ring-0 h-auto"
                 placeholder="Título de la tarea"
               />
+            </div>
+
+            {/* Status Selector */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Circle className="w-4 h-4" />
+                Estado
+              </label>
+              <Select
+                value={task.status}
+                onValueChange={handleStatusChange}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: currentStatus.color }}
+                      />
+                      {currentStatus.label}
+                    </span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: opt.color }}
+                        />
+                        {opt.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Quick Properties */}
@@ -262,20 +366,6 @@ export function TaskDetailPanel({
                 </Select>
               </div>
 
-              {/* Due Date */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Fecha límite
-                </label>
-                <Input
-                  type="date"
-                  value={task.dueDate ? format(new Date(task.dueDate), 'yyyy-MM-dd') : ''}
-                  onChange={(e) => onUpdate({ dueDate: e.target.value ? new Date(e.target.value) : null })}
-                  className="w-full"
-                />
-              </div>
-
               {/* Assignee */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -286,6 +376,34 @@ export function TaskDetailPanel({
                   value={task.assignee || ''}
                   onChange={(e) => onUpdate({ assignee: e.target.value || null })}
                   placeholder="Sin asignar"
+                />
+              </div>
+
+              {/* Start Date */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Fecha de inicio
+                </label>
+                <Input
+                  type="date"
+                  value={task.startDate ? format(new Date(task.startDate), 'yyyy-MM-dd') : ''}
+                  onChange={(e) => onUpdate({ startDate: e.target.value ? new Date(e.target.value) : null })}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Due Date */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Fecha de fin
+                </label>
+                <Input
+                  type="date"
+                  value={task.dueDate ? format(new Date(task.dueDate), 'yyyy-MM-dd') : ''}
+                  onChange={(e) => onUpdate({ dueDate: e.target.value ? new Date(e.target.value) : null })}
+                  className="w-full"
                 />
               </div>
 
@@ -302,9 +420,23 @@ export function TaskDetailPanel({
                   placeholder="0"
                 />
               </div>
+
+              {/* Time Actual */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Tiempo real (h)
+                </label>
+                <Input
+                  type="number"
+                  value={task.actualTime || ''}
+                  onChange={(e) => onUpdate({ actualTime: e.target.value ? Number(e.target.value) : null })}
+                  placeholder="0"
+                />
+              </div>
             </div>
 
-            {/* Market Field - BUG FIX: All Amazon marketplaces */}
+            {/* Market Field */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Globe className="w-4 h-4" />
@@ -366,9 +498,12 @@ export function TaskDetailPanel({
                   );
                 })}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Usa el gestor de etiquetas (icono 🏷️ en la cabecera) para crear, editar o eliminar etiquetas.
+              </p>
             </div>
 
-            {/* Description - BUG FIX: Auto-growing textarea, no internal scroll */}
+            {/* Description */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <FileText className="w-4 h-4" />
@@ -455,7 +590,8 @@ export function TaskDetailPanel({
             {/* Metadata */}
             <div className="pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
               <p>Creada: {format(new Date(task.createdAt), "d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })}</p>
-              {task.actualTime && <p>Tiempo registrado: {task.actualTime}h</p>}
+              {task.startDate && <p>Inicio: {format(new Date(task.startDate), "d 'de' MMMM 'de' yyyy", { locale: es })}</p>}
+              {task.dueDate && <p>Fin: {format(new Date(task.dueDate), "d 'de' MMMM 'de' yyyy", { locale: es })}</p>}
             </div>
           </div>
         </div>
