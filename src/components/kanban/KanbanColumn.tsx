@@ -121,8 +121,11 @@ export function KanbanColumn({
     e.preventDefault();
     e.stopPropagation();
     
-    if (draggedTaskId && dropIndex !== null) {
-      onMoveTask(draggedTaskId, column.id, dropIndex);
+    // Get task ID from dataTransfer as fallback, or use the state
+    const taskId = draggedTaskId || e.dataTransfer.getData('application/x-task-id') || e.dataTransfer.getData('text/plain');
+    
+    if (taskId && dropIndex !== null) {
+      onMoveTask(taskId, column.id, dropIndex);
     }
     setDropIndex(null);
   };
