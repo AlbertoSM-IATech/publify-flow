@@ -123,9 +123,15 @@ export function KanbanBoard() {
     { id: 'notes' as ViewType, icon: FileText, label: 'Notas' },
   ];
 
-  // Get visible and hidden columns
-  const visibleColumns = kanban.columns.filter(c => !c.isHidden);
-  const hiddenColumns = kanban.columns.filter(c => c.isHidden);
+  // Get visible and hidden columns, sorted by order
+  const visibleColumns = useMemo(() => 
+    kanban.columns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
+    [kanban.columns]
+  );
+  const hiddenColumns = useMemo(() => 
+    kanban.columns.filter(c => c.isHidden).sort((a, b) => a.order - b.order),
+    [kanban.columns]
+  );
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -311,6 +317,15 @@ export function KanbanBoard() {
                     return { blocked: result.blocked, blockingTasks: result.blockingTasks };
                   }}
                   shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
+                  onArchiveTask={(taskId) => {
+                    // Move task to archived column
+                    const archivedColumn = kanban.columns.find(c => c.id === 'archived');
+                    if (archivedColumn) {
+                      const tasksInArchived = kanban.getTasksByColumn('archived').length;
+                      kanban.moveTask(taskId, 'archived', tasksInArchived);
+                      toast.success('Tarea archivada');
+                    }
+                  }}
                 />
               ))}
               

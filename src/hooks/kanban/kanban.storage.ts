@@ -323,14 +323,16 @@ export function loadKanbanState(): KanbanState | null {
 
     const payload: StoragePayload = JSON.parse(stored);
     
-    // Version check
+    // Always deserialize with migration to ensure system columns exist
+    const migratedState = deserializeState(payload.data);
+    
+    // If version mismatch or columns were added, save the migrated state
     if (payload.version !== STORAGE_VERSION) {
-      console.warn('[Kanban Storage] Version mismatch, attempting migration');
-      // Try to deserialize with migration
-      return deserializeState(payload.data);
+      console.warn('[Kanban Storage] Version mismatch, migrating...');
+      saveKanbanState(migratedState);
     }
 
-    return deserializeState(payload.data);
+    return migratedState;
   } catch (error) {
     console.error('[Kanban Storage] Error loading state:', error);
     return null;
