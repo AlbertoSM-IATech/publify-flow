@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag, FileText, Undo2, Redo2 } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanbanReducer } from '@/hooks/kanban';
@@ -27,26 +27,12 @@ export function KanbanBoard() {
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
   const [newTaskColumnId, setNewTaskColumnId] = useState<string | undefined>(undefined);
   const [showTagManager, setShowTagManager] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return document.documentElement.classList.contains('dark');
-    }
-    return true;
-  });
 
   // BUG FIX: Derive selectedTask from tasks array for real-time reactivity
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) return null;
     return kanban.tasks.find(t => t.id === selectedTaskId) || null;
   }, [selectedTaskId, kanban.tasks]);
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDark]);
 
   const handleTaskClick = useCallback((task: Task) => {
     setSelectedTaskId(task.id);
@@ -175,14 +161,6 @@ export function KanbanBoard() {
               title="Gestionar etiquetas"
             >
               <Tag className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setIsDark(!isDark)}
-              className="border-border"
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
             <Button 
               onClick={() => handleOpenNewTaskDialog()}
