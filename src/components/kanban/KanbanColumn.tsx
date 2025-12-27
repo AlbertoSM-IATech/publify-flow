@@ -49,6 +49,8 @@ interface KanbanColumnProps {
   isDraggingColumn: boolean;
   isAnyTaskDragging: boolean;
   wouldExceedWipLimit?: boolean;
+  // Dependency blocking
+  getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
 }
 
 export function KanbanColumn({
@@ -68,6 +70,7 @@ export function KanbanColumn({
   isDraggingColumn,
   isAnyTaskDragging,
   wouldExceedWipLimit = false,
+  getTaskBlockedStatus,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -293,21 +296,26 @@ export function KanbanColumn({
         onDrop={handleDrop}
         onDragLeave={handleDragLeave}
       >
-        {tasks.map((task, index) => (
-          <div key={task.id} data-task-id={task.id} className="relative py-1">
-            {/* Drop indicator BEFORE this task */}
-            {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
-              <div className="absolute -top-0.5 left-0 right-0 h-1 bg-primary rounded-full z-20 shadow-[0_0_8px_hsl(var(--primary))]" />
-            )}
-            <TaskCard
-              task={task}
-              onClick={() => onTaskClick(task)}
-              onDragStart={(e) => onDragStart(e, task.id)}
-              onDragEnd={onDragEnd}
-              isDragging={draggedTaskId === task.id}
-            />
-          </div>
-        ))}
+        {tasks.map((task, index) => {
+          const blockStatus = getTaskBlockedStatus?.(task.id) || { blocked: false, blockingTasks: [] };
+          return (
+            <div key={task.id} data-task-id={task.id} className="relative py-1">
+              {/* Drop indicator BEFORE this task */}
+              {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
+                <div className="absolute -top-0.5 left-0 right-0 h-1 bg-primary rounded-full z-20 shadow-[0_0_8px_hsl(var(--primary))]" />
+              )}
+              <TaskCard
+                task={task}
+                onClick={() => onTaskClick(task)}
+                onDragStart={(e) => onDragStart(e, task.id)}
+                onDragEnd={onDragEnd}
+                isDragging={draggedTaskId === task.id}
+                isBlocked={blockStatus.blocked}
+                blockingTasks={blockStatus.blockingTasks}
+              />
+            </div>
+          );
+        })}
         
         {/* Drop zone at the end */}
         {draggedTaskId && (
