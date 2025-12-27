@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   X, Calendar, Tag, User, Clock, Trash2, Copy, MoreHorizontal,
   CheckSquare, Plus, AlertCircle, FileText, Archive, Circle,
   Search, Layout, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, Globe, GripVertical
+  TrendingUp, Megaphone, Settings, Check, Folder, Globe, GripVertical,
+  Link, Lock, AlertTriangle
 } from 'lucide-react';
 import { Task, Column, Tag as TagType, Priority, TaskStatus } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const iconMap: Record<string, React.ReactNode> = {
   search: <Search className="w-4 h-4" />,
@@ -85,6 +92,7 @@ interface TaskDetailPanelProps {
   task: Task;
   columns: Column[];
   availableTags: TagType[];
+  allTasks: Task[]; // For dependency selection
   onClose: () => void;
   onUpdate: (updates: Partial<Task>) => void;
   onDelete: () => void;
@@ -93,16 +101,233 @@ interface TaskDetailPanelProps {
   onAddChecklistItem: (text: string) => void;
   onToggleChecklistItem: (itemId: string) => void;
   onDeleteChecklistItem: (itemId: string) => void;
+  // Dependency callbacks
+  onAddDependency?: (dependsOnTaskId: string) => void;
+  onRemoveDependency?: (dependencyId: string) => void;
+  // Dependency status
+  isBlocked?: boolean;
+  blockingTasks?: Task[];
+  wouldCreateCycle?: (dependsOnTaskId: string) => boolean;
 }
 
 const MIN_PANEL_WIDTH = 400;
 const MAX_PANEL_WIDTH = 900;
 const DEFAULT_PANEL_WIDTH = 640;
 
+// ============= Dependencies Section Component =============
+interface DependenciesSectionProps {
+  task: Task;
+  allTasks: Task[];
+  onAddDependency?: (dependsOnTaskId: string) => void;
+  onRemoveDependency?: (dependencyId: string) => void;
+  wouldCreateCycle?: (dependsOnTaskId: string) => boolean;
+}
+
+function DependenciesSection({
+  task,
+  allTasks,
+  onAddDependency,
+  onRemoveDependency,
+  wouldCreateCycle,
+}: DependenciesSectionProps) {
+  const [showAddDependency, setShowAddDependency] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cycleError, setCycleError] = useState<string | null>(null);
+
+  const dependencies = task.taskDependencies || [];
+  
+  // Get tasks that are already dependencies
+  const dependencyTaskIds = new Set(dependencies.map(d => d.dependsOnTaskId));
+  
+  // Filter available tasks for the dropdown
+  const availableForDependency = useMemo(() => {
+    return allTasks.filter(t => 
+      t.id !== task.id && // Not the current task
+      !dependencyTaskIds.has(t.id) && // Not already a dependency
+      !t.isArchived // Not archived
+    );
+  }, [allTasks, task.id, dependencyTaskIds]);
+
+  // Search filtered tasks
+  const filteredTasks = useMemo(() => {
+    if (!searchQuery.trim()) return availableForDependency;
+    const query = searchQuery.toLowerCase();
+    return availableForDependency.filter(t => 
+      t.title.toLowerCase().includes(query)
+    );
+  }, [availableForDependency, searchQuery]);
+
+  const handleAddDependency = (dependsOnTaskId: string) => {
+    // Check for cycles
+    if (wouldCreateCycle && wouldCreateCycle(dependsOnTaskId)) {
+      setCycleError('No se puede añadir: crearía un ciclo de dependencias');
+      setTimeout(() => setCycleError(null), 3000);
+      return;
+    }
+    
+    onAddDependency?.(dependsOnTaskId);
+    setShowAddDependency(false);
+    setSearchQuery('');
+    setCycleError(null);
+  };
+
+  const handleRemoveDependency = (dependencyId: string) => {
+    onRemoveDependency?.(dependencyId);
+  };
+
+  // Get the task object for each dependency
+  const dependencyTasks = useMemo(() => {
+    return dependencies.map(dep => {
+      const depTask = allTasks.find(t => t.id === dep.dependsOnTaskId);
+      return { dependency: dep, task: depTask };
+    }).filter(item => item.task !== undefined);
+  }, [dependencies, allTasks]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <Link className="w-4 h-4" />
+          Dependencias (prerequisitos)
+        </label>
+        <span className="text-xs text-muted-foreground">
+          {dependencyTasks.length} {dependencyTasks.length === 1 ? 'tarea' : 'tareas'}
+        </span>
+      </div>
+
+      {/* Cycle Error */}
+      {cycleError && (
+        <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-sm">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {cycleError}
+        </div>
+      )}
+
+      {/* Dependencies List */}
+      {dependencyTasks.length > 0 && (
+        <div className="space-y-2">
+          {dependencyTasks.map(({ dependency, task: depTask }) => {
+            if (!depTask) return null;
+            const isCompleted = depTask.status === 'completed' || depTask.isArchived;
+            return (
+              <div
+                key={dependency.id}
+                className={cn(
+                  "flex items-center gap-3 group p-2 rounded-lg transition-colors",
+                  isCompleted ? "bg-muted/30" : "bg-amber-500/10 border border-amber-500/20"
+                )}
+              >
+                {isCompleted ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                ) : (
+                  <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                )}
+                <span className={cn(
+                  "flex-1 text-sm truncate",
+                  isCompleted && "text-muted-foreground line-through"
+                )}>
+                  {depTask.title}
+                </span>
+                <span className={cn(
+                  "text-xs px-1.5 py-0.5 rounded",
+                  isCompleted 
+                    ? "bg-green-500/20 text-green-600"
+                    : "bg-amber-500/20 text-amber-600"
+                )}>
+                  {isCompleted ? 'Completada' : 'Pendiente'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                  onClick={() => handleRemoveDependency(dependency.id)}
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Dependency */}
+      {showAddDependency ? (
+        <div className="space-y-2 p-3 rounded-lg border border-border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar tarea..."
+              className="h-8"
+              autoFocus
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => {
+                setShowAddDependency(false);
+                setSearchQuery('');
+                setCycleError(null);
+              }}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="max-h-40 overflow-y-auto space-y-1">
+            {filteredTasks.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2 text-center">
+                {availableForDependency.length === 0 
+                  ? 'No hay tareas disponibles'
+                  : 'No se encontraron tareas'}
+              </p>
+            ) : (
+              filteredTasks.slice(0, 10).map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => handleAddDependency(t.id)}
+                  className="w-full text-left px-3 py-2 rounded-md hover:bg-muted text-sm transition-colors flex items-center gap-2"
+                >
+                  <Circle className="w-3 h-3 text-muted-foreground" />
+                  <span className="truncate">{t.title}</span>
+                </button>
+              ))
+            )}
+            {filteredTasks.length > 10 && (
+              <p className="text-xs text-muted-foreground py-1 text-center">
+                +{filteredTasks.length - 10} más...
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowAddDependency(true)}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Añadir dependencia
+        </Button>
+      )}
+
+      {dependencyTasks.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Esta tarea no puede completarse hasta que las tareas pendientes estén terminadas.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function TaskDetailPanel({
   task,
   columns,
   availableTags,
+  allTasks,
   onClose,
   onUpdate,
   onDelete,
@@ -111,6 +336,11 @@ export function TaskDetailPanel({
   onAddChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
+  onAddDependency,
+  onRemoveDependency,
+  isBlocked = false,
+  blockingTasks = [],
+  wouldCreateCycle,
 }: TaskDetailPanelProps) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -254,6 +484,31 @@ export function TaskDetailPanel({
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Blocked Badge */}
+            {isBlocked && blockingTasks.length > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/15 text-destructive text-xs font-medium">
+                      <Lock className="w-3 h-3" />
+                      Bloqueada
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="font-medium mb-1">Depende de:</p>
+                    <ul className="text-xs space-y-0.5">
+                      {blockingTasks.map(bt => (
+                        <li key={bt.id} className="flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          {bt.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -596,6 +851,15 @@ export function TaskDetailPanel({
                 </Button>
               </div>
             </div>
+
+            {/* Dependencies Section */}
+            <DependenciesSection
+              task={task}
+              allTasks={allTasks}
+              onAddDependency={onAddDependency}
+              onRemoveDependency={onRemoveDependency}
+              wouldCreateCycle={wouldCreateCycle}
+            />
 
             {/* Metadata */}
             <div className="pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
