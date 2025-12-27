@@ -125,6 +125,22 @@ function serializeState(state: KanbanState): SerializedKanbanState {
 
 // Deserialize the state from storage with migration support
 function deserializeState(serialized: SerializedKanbanState): KanbanState {
+  const now = new Date();
+  
+  // Migrate old automations to new format
+  const migratedAutomations = (serialized.automations || []).map(a => {
+    // Check if it's already in new format
+    if ('conditions' in a && 'actions' in a) {
+      return {
+        ...a,
+        createdAt: a.createdAt ? new Date(a.createdAt as unknown as string) : now,
+        updatedAt: a.updatedAt ? new Date(a.updatedAt as unknown as string) : now,
+      };
+    }
+    // Old format - skip (will be replaced by seeds)
+    return null;
+  }).filter(Boolean) as Automation[];
+
   return {
     tasks: serialized.tasks.map(task => {
       // Migrate checklist to subtasks if needed
@@ -158,7 +174,9 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
         to: deserializeDate(serialized.filter.dueDate.to),
       },
     },
-    automations: serialized.automations,
+    automations: migratedAutomations,
+    automationLogs: (serialized as any).automationLogs || [],
+    notifications: [], // Notifications are not persisted
   };
 }
 

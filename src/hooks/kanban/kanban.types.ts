@@ -1,4 +1,4 @@
-import { Task, Column, Tag, Note, Automation, Filter } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
 
 export interface KanbanState {
   tasks: Task[];
@@ -7,6 +7,8 @@ export interface KanbanState {
   notes: Note[];
   filter: Filter;
   automations: Automation[];
+  automationLogs: AutomationExecution[];
+  notifications: AutomationNotification[];
 }
 
 export type KanbanActionType =
@@ -34,6 +36,15 @@ export type KanbanActionType =
   | 'SUBTASK_UPDATED'
   | 'SUBTASK_TOGGLED'
   | 'SUBTASK_DELETED'
+  // Automation actions
+  | 'AUTOMATION_CREATED'
+  | 'AUTOMATION_UPDATED'
+  | 'AUTOMATION_DELETED'
+  | 'AUTOMATION_TOGGLED'
+  | 'AUTOMATION_LOGS_ADDED'
+  | 'NOTIFICATION_ADDED'
+  | 'NOTIFICATION_DISMISSED'
+  | 'NOTIFICATIONS_CLEARED'
   // Legacy checklist (deprecated, kept for compatibility)
   | 'CHECKLIST_ITEM_ADDED'
   | 'CHECKLIST_ITEM_TOGGLED'

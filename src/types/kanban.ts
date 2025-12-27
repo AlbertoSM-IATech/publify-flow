@@ -80,16 +80,17 @@ export interface Note {
   updatedAt: Date;
 }
 
-export interface Automation {
-  id: string;
-  name: string;
-  trigger: {
-    type: 'priority' | 'dueDate' | 'checklist' | 'dependency';
-    value: string;
-  };
-  action: {
-    type: 'moveToColumn' | 'setPriority' | 'addTag' | 'notify';
-    value: string;
-  };
-  enabled: boolean;
-}
+// Re-export Automation types from automation.ts
+export type {
+  Automation,
+  AutomationTrigger,
+  AutomationCondition,
+  AutomationAction,
+  AutomationExecution,
+  AutomationNotification,
+  AutomationEvent,
+  AutomationTriggerType,
+  AutomationConditionType,
+  AutomationActionType,
+  AutomationScope,
+} from './automation';
