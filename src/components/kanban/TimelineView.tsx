@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, GripVertical, Calendar } from 'lucide-react';
-import { Task, Priority, Column } from '@/types/kanban';
+import { ChevronLeft, ChevronRight, GripVertical, Calendar, Link } from 'lucide-react';
+import { Task, Priority, Column, TaskDependency } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -32,6 +32,7 @@ interface TimelineViewProps {
   columns: Column[];
   onTaskClick: (task: Task) => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  getDependencyEdges?: () => { fromTaskId: string; toTaskId: string; fromTask: Task; toTask: Task }[];
 }
 
 const priorityColors: Record<Priority, string> = {
@@ -48,17 +49,20 @@ const MONTHS = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
-export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask }: TimelineViewProps) {
+export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDependencyEdges }: TimelineViewProps) {
   const [startDateInput, setStartDateInput] = useState<Date>(addDays(new Date(), -7));
   const [endDateInput, setEndDateInput] = useState<Date>(addDays(new Date(), 30));
   const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('week');
   const [draggedTask, setDraggedTask] = useState<{ id: string; type: 'move' | 'resize-start' | 'resize-end' } | null>(null);
   const [dragStartX, setDragStartX] = useState<number>(0);
   const [dragStartDate, setDragStartDate] = useState<Date | null>(null);
+  const [showDependencies, setShowDependencies] = useState(true);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const taskColumnRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   // Sync horizontal scroll between header and content
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -127,6 +131,28 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask }: Time
       })
       .sort((a, b) => a.taskStartDate.getTime() - b.taskStartDate.getTime());
   }, [tasks, startDateInput, days.length]);
+
+  // Calculate row index for each task (for Y positioning)
+  const taskRowIndex = useMemo(() => {
+    const index = new Map<string, number>();
+    timelineTasks.forEach((task, i) => {
+      index.set(task.id, i);
+    });
+    return index;
+  }, [timelineTasks]);
+
+  // Get dependency edges for visualization
+  const dependencyEdges = useMemo(() => {
+    if (!getDependencyEdges || !showDependencies) return [];
+    
+    const edges = getDependencyEdges();
+    // Filter to only include edges where both tasks are visible in the timeline
+    return edges.filter(edge => {
+      const fromIndex = taskRowIndex.get(edge.fromTaskId);
+      const toIndex = taskRowIndex.get(edge.toTaskId);
+      return fromIndex !== undefined && toIndex !== undefined;
+    });
+  }, [getDependencyEdges, showDependencies, taskRowIndex]);
 
   const handlePrev = () => {
     switch (zoomLevel) {
@@ -281,6 +307,17 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask }: Time
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
+
+          {/* Show Dependencies Toggle */}
+          <Button
+            variant={showDependencies ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowDependencies(!showDependencies)}
+            className="gap-2"
+          >
+            <Link className="w-4 h-4" />
+            Dependencias
+          </Button>
         </div>
       </div>
 
@@ -334,7 +371,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask }: Time
         {/* Task Rows */}
         <div 
           ref={contentRef}
-          className="flex-1 overflow-auto scrollbar-thin"
+          className="flex-1 overflow-auto scrollbar-thin relative"
           onScroll={handleScroll}
         >
           {timelineTasks.length === 0 ? (
@@ -346,103 +383,216 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask }: Time
               </div>
             </div>
           ) : (
-            timelineTasks.map((task) => {
-              const left = Math.max(0, task.startOffset) * dayWidth;
-              const visibleStart = Math.max(0, task.startOffset);
-              const visibleEnd = Math.min(days.length, task.startOffset + task.duration);
-              const width = Math.max((visibleEnd - visibleStart) * dayWidth, dayWidth);
+            <div className="relative">
+              {/* Task Rows */}
+              {timelineTasks.map((task, rowIndex) => {
+                const left = Math.max(0, task.startOffset) * dayWidth;
+                const visibleStart = Math.max(0, task.startOffset);
+                const visibleEnd = Math.min(days.length, task.startOffset + task.duration);
+                const width = Math.max((visibleEnd - visibleStart) * dayWidth, dayWidth);
+                
+                const isHighlighted = dependencyEdges.some(
+                  edge => (edge.fromTaskId === task.id || edge.toTaskId === task.id) && 
+                         hoveredEdge === `${edge.fromTaskId}-${edge.toTaskId}`
+                );
 
-              return (
-                <div key={task.id} className="flex min-h-[44px] border-b border-border/50">
-                  {/* Task name column - STICKY */}
+                return (
                   <div 
-                    ref={taskColumnRef}
-                    className="w-56 flex-shrink-0 px-3 py-2 border-r border-border bg-card flex items-center sticky left-0 z-10"
+                    key={task.id} 
+                    data-task-id={task.id}
+                    className={cn(
+                      "flex min-h-[44px] border-b border-border/50 transition-colors",
+                      isHighlighted && "bg-primary/5"
+                    )}
                   >
-                    <span className="text-sm truncate text-foreground font-medium">
-                      {task.title}
-                    </span>
-                  </div>
-                  
-                  {/* Timeline area */}
-                  <div className="flex-1 relative min-w-0" style={{ width: days.length * dayWidth }}>
-                    {/* Day columns background */}
-                    <div className="absolute inset-0 flex">
-                      {days.map((date, index) => (
-                        <div
-                          key={index}
-                          className={cn(
-                            "flex-shrink-0 border-r border-border/30",
-                            isToday(date) && "bg-primary/5",
-                            isWeekend(date) && "bg-muted/20"
-                          )}
-                          style={{ width: dayWidth, minWidth: dayWidth }}
-                        />
-                      ))}
+                    {/* Task name column - STICKY */}
+                    <div 
+                      ref={taskColumnRef}
+                      className={cn(
+                        "w-56 flex-shrink-0 px-3 py-2 border-r border-border bg-card flex items-center sticky left-0 z-10 transition-colors",
+                        isHighlighted && "bg-primary/10"
+                      )}
+                    >
+                      <span className="text-sm truncate text-foreground font-medium">
+                        {task.title}
+                      </span>
                     </div>
                     
-                    {/* Task bar */}
-                    <div
-                      className={cn(
-                        "absolute top-1 bottom-1 rounded-md flex items-center px-2 cursor-pointer transition-all group",
-                        "hover:ring-2 hover:ring-primary/50",
-                        draggedTask?.id === task.id && "opacity-70 ring-2 ring-primary"
-                      )}
-                      style={{
-                        left,
-                        width: Math.max(width, dayWidth),
-                        backgroundColor: `${priorityColors[task.priority]}20`,
-                        borderLeft: `3px solid ${priorityColors[task.priority]}`,
-                      }}
-                      onClick={() => onTaskClick(task)}
-                    >
-                      {/* Drag handle for moving */}
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-                        onMouseDown={(e) => handleDragStart(e, task.id, 'move')}
-                      >
-                        <GripVertical className="w-3 h-3 text-muted-foreground" />
+                    {/* Timeline area */}
+                    <div className="flex-1 relative min-w-0" style={{ width: days.length * dayWidth }}>
+                      {/* Day columns background */}
+                      <div className="absolute inset-0 flex">
+                        {days.map((date, index) => (
+                          <div
+                            key={index}
+                            className={cn(
+                              "flex-shrink-0 border-r border-border/30",
+                              isToday(date) && "bg-primary/5",
+                              isWeekend(date) && "bg-muted/20"
+                            )}
+                            style={{ width: dayWidth, minWidth: dayWidth }}
+                          />
+                        ))}
                       </div>
                       
-                      {/* Task title */}
-                      <span className="text-xs font-medium truncate text-foreground ml-4">
-                        {width > 100 ? task.title : ''}
-                      </span>
-
-                      {/* Tags */}
-                      {task.tags.length > 0 && width > 150 && (
-                        <div className="flex gap-1 ml-2">
-                          {task.tags.slice(0, 2).map(tag => (
-                            <span
-                              key={tag.id}
-                              className="text-[10px] px-1 rounded"
-                              style={{
-                                backgroundColor: `${tag.color}30`,
-                                color: tag.color,
-                              }}
-                            >
-                              {tag.name}
-                            </span>
-                          ))}
+                      {/* Task bar */}
+                      <div
+                        className={cn(
+                          "absolute top-1 bottom-1 rounded-md flex items-center px-2 cursor-pointer transition-all group",
+                          "hover:ring-2 hover:ring-primary/50",
+                          draggedTask?.id === task.id && "opacity-70 ring-2 ring-primary",
+                          isHighlighted && "ring-2 ring-primary"
+                        )}
+                        style={{
+                          left,
+                          width: Math.max(width, dayWidth),
+                          backgroundColor: `${priorityColors[task.priority]}20`,
+                          borderLeft: `3px solid ${priorityColors[task.priority]}`,
+                        }}
+                        onClick={() => onTaskClick(task)}
+                      >
+                        {/* Drag handle for moving */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+                          onMouseDown={(e) => handleDragStart(e, task.id, 'move')}
+                        >
+                          <GripVertical className="w-3 h-3 text-muted-foreground" />
                         </div>
-                      )}
+                        
+                        {/* Task title */}
+                        <span className="text-xs font-medium truncate text-foreground ml-4">
+                          {width > 100 ? task.title : ''}
+                        </span>
 
-                      {/* Resize handle - left */}
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-l-md transition-opacity"
-                        onMouseDown={(e) => handleDragStart(e, task.id, 'resize-start')}
-                      />
+                        {/* Tags */}
+                        {task.tags.length > 0 && width > 150 && (
+                          <div className="flex gap-1 ml-2">
+                            {task.tags.slice(0, 2).map(tag => (
+                              <span
+                                key={tag.id}
+                                className="text-[10px] px-1 rounded"
+                                style={{
+                                  backgroundColor: `${tag.color}30`,
+                                  color: tag.color,
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
-                      {/* Resize handle - right */}
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-r-md transition-opacity"
-                        onMouseDown={(e) => handleDragStart(e, task.id, 'resize-end')}
-                      />
+                        {/* Resize handle - left */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-l-md transition-opacity"
+                          onMouseDown={(e) => handleDragStart(e, task.id, 'resize-start')}
+                        />
+
+                        {/* Resize handle - right */}
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-r-md transition-opacity"
+                          onMouseDown={(e) => handleDragStart(e, task.id, 'resize-end')}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+
+              {/* Dependency Arrows SVG Overlay */}
+              {showDependencies && dependencyEdges.length > 0 && (
+                <svg
+                  ref={svgRef}
+                  className="absolute top-0 left-56 pointer-events-none"
+                  style={{
+                    width: days.length * dayWidth,
+                    height: timelineTasks.length * 44,
+                  }}
+                >
+                  <defs>
+                    <marker
+                      id="arrowhead"
+                      markerWidth="8"
+                      markerHeight="6"
+                      refX="7"
+                      refY="3"
+                      orient="auto"
+                    >
+                      <polygon
+                        points="0 0, 8 3, 0 6"
+                        fill="hsl(var(--primary))"
+                      />
+                    </marker>
+                    <marker
+                      id="arrowhead-hover"
+                      markerWidth="10"
+                      markerHeight="8"
+                      refX="8"
+                      refY="4"
+                      orient="auto"
+                    >
+                      <polygon
+                        points="0 0, 10 4, 0 8"
+                        fill="hsl(var(--primary))"
+                      />
+                    </marker>
+                  </defs>
+                  
+                  {dependencyEdges.map(edge => {
+                    const fromIndex = taskRowIndex.get(edge.fromTaskId);
+                    const toIndex = taskRowIndex.get(edge.toTaskId);
+                    if (fromIndex === undefined || toIndex === undefined) return null;
+
+                    const fromTask = timelineTasks.find(t => t.id === edge.fromTaskId);
+                    const toTask = timelineTasks.find(t => t.id === edge.toTaskId);
+                    if (!fromTask || !toTask) return null;
+
+                    // Calculate positions
+                    const fromEndX = Math.max(0, fromTask.startOffset) * dayWidth + 
+                      Math.max((Math.min(days.length, fromTask.startOffset + fromTask.duration) - Math.max(0, fromTask.startOffset)) * dayWidth, dayWidth);
+                    const fromY = fromIndex * 44 + 22; // Center of row
+
+                    const toStartX = Math.max(0, toTask.startOffset) * dayWidth;
+                    const toY = toIndex * 44 + 22;
+
+                    const edgeId = `${edge.fromTaskId}-${edge.toTaskId}`;
+                    const isHovered = hoveredEdge === edgeId;
+
+                    // Create a curved path
+                    const midX = (fromEndX + toStartX) / 2;
+                    const pathD = fromY === toY
+                      ? `M ${fromEndX} ${fromY} L ${toStartX - 4} ${toY}`
+                      : `M ${fromEndX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toStartX - 4} ${toY}`;
+
+                    return (
+                      <g key={edgeId}>
+                        {/* Invisible wider path for easier hover */}
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke="transparent"
+                          strokeWidth={12}
+                          className="pointer-events-auto cursor-pointer"
+                          onMouseEnter={() => setHoveredEdge(edgeId)}
+                          onMouseLeave={() => setHoveredEdge(null)}
+                          onClick={() => onTaskClick(edge.toTask)}
+                        />
+                        {/* Visible path */}
+                        <path
+                          d={pathD}
+                          fill="none"
+                          stroke={isHovered ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.4)"}
+                          strokeWidth={isHovered ? 2.5 : 1.5}
+                          strokeDasharray={isHovered ? "none" : "4 2"}
+                          markerEnd={isHovered ? "url(#arrowhead-hover)" : "url(#arrowhead)"}
+                          className="transition-all duration-150"
+                        />
+                      </g>
+                    );
+                  })}
+                </svg>
+              )}
+            </div>
           )}
         </div>
       </div>

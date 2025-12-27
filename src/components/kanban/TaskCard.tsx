@@ -1,9 +1,15 @@
-import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle } from 'lucide-react';
+import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock } from 'lucide-react';
 import { Task, Priority, TaskStatus } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRef } from 'react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface TaskCardProps {
   task: Task;
@@ -11,6 +17,8 @@ interface TaskCardProps {
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  isBlocked?: boolean;
+  blockingTasks?: Task[];
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
@@ -29,7 +37,7 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   completed: { label: 'Terminado', color: '#22C55E' },
 };
 
-export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [] }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // Use subtasks for progress calculation
   const subtasks = task.subtasks || [];
@@ -67,14 +75,38 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
     <div
       ref={cardRef}
       className={cn(
-        "kanban-card select-none cursor-pointer",
-        isDragging && "opacity-50 ring-2 ring-primary/50"
+        "kanban-card select-none cursor-pointer relative",
+        isDragging && "opacity-50 ring-2 ring-primary/50",
+        isBlocked && "ring-1 ring-amber-500/50"
       )}
       onClick={onClick}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {/* Blocked Badge - Top right corner */}
+      {isBlocked && blockingTasks.length > 0 && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="absolute -top-1 -right-1 z-10 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-medium shadow-sm">
+                <Lock className="w-2.5 h-2.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              <p className="font-medium mb-1 text-xs">Bloqueada por:</p>
+              <ul className="text-xs space-y-0.5">
+                {blockingTasks.slice(0, 3).map(bt => (
+                  <li key={bt.id} className="truncate">• {bt.title}</li>
+                ))}
+                {blockingTasks.length > 3 && (
+                  <li className="text-muted-foreground">+{blockingTasks.length - 3} más</li>
+                )}
+              </ul>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {/* Header with drag handle and tags */}
       <div className="flex items-center gap-2 mb-2 -mt-1">
         <GripVertical className="w-4 h-4 text-muted-foreground/50 cursor-grab flex-shrink-0" />

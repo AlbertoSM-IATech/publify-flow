@@ -4,7 +4,7 @@ import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
 import { loadKanbanState, saveKanbanState } from './kanban.storage';
 import { createSeedState } from './kanban.seed';
-import { isTaskBlocked, shouldBlockMoveToColumn, wouldCreateCycle } from './kanban.dependencies';
+import { isTaskBlocked, shouldBlockMoveToColumn, wouldCreateCycle, getDependencyEdges } from './kanban.dependencies';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -360,6 +360,9 @@ export function useKanbanReducer() {
     }, [state]),
     wouldCreateCycle: useCallback((taskId: string, dependsOnTaskId: string) => {
       return wouldCreateCycle(taskId, dependsOnTaskId, state);
+    }, [state]),
+    getDependencyEdges: useCallback(() => {
+      return getDependencyEdges(state);
     }, [state]),
     
     // Getters

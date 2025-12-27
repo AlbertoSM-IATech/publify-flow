@@ -279,6 +279,10 @@ export function KanbanBoard() {
                   isDraggingColumn={draggedColumnId === column.id}
                   isAnyTaskDragging={draggedTaskId !== null}
                   wouldExceedWipLimit={kanban.wouldExceedWipLimit(column.id)}
+                  getTaskBlockedStatus={(taskId) => {
+                    const result = kanban.isTaskBlocked(taskId);
+                    return { blocked: result.blocked, blockingTasks: result.blockingTasks };
+                  }}
                 />
               ))}
               
@@ -320,6 +324,7 @@ export function KanbanBoard() {
             columns={kanban.columns}
             onTaskClick={handleTaskClick}
             onUpdateTask={kanban.updateTask}
+            getDependencyEdges={kanban.getDependencyEdges}
           />
         )}
 
