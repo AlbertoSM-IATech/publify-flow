@@ -8,8 +8,8 @@ import { isTaskBlocked, shouldBlockMoveToColumn, wouldCreateCycle } from './kanb
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Compute initial history once, outside of component
-const computeInitialHistory = (): HistoryState => {
+// Lazy initializer for useReducer - only called once per component mount
+function getInitialHistory(): HistoryState {
   try {
     const stored = loadKanbanState();
     const initialState = stored || createSeedState();
@@ -27,13 +27,11 @@ const computeInitialHistory = (): HistoryState => {
       future: [],
     };
   }
-};
-
-// Cache the initial state to prevent re-computation
-const cachedInitialHistory = computeInitialHistory();
+}
 
 export function useKanbanReducer() {
-  const [history, dispatch] = useReducer(kanbanReducer, cachedInitialHistory);
+  // Use lazy initialization to avoid issues with module-level computation
+  const [history, dispatch] = useReducer(kanbanReducer, undefined, getInitialHistory);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSavedRef = useRef<string>('');
