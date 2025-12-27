@@ -340,6 +340,7 @@ export function KanbanBoard() {
           task={selectedTask}
           columns={kanban.columns}
           availableTags={kanban.availableTags}
+          allTasks={kanban.tasks}
           onClose={handleClosePanel}
           onUpdate={(updates) => kanban.updateTask(selectedTaskId, updates)}
           onDelete={() => {
@@ -358,6 +359,11 @@ export function KanbanBoard() {
           onAddChecklistItem={(text) => kanban.addChecklistItem(selectedTaskId, text)}
           onToggleChecklistItem={(itemId) => kanban.toggleChecklistItem(selectedTaskId, itemId)}
           onDeleteChecklistItem={(itemId) => kanban.deleteChecklistItem(selectedTaskId, itemId)}
+          onAddDependency={(dependsOnTaskId) => kanban.addDependency(selectedTaskId, dependsOnTaskId)}
+          onRemoveDependency={(dependencyId) => kanban.removeDependency(selectedTaskId, dependencyId)}
+          isBlocked={kanban.isTaskBlocked(selectedTaskId).blocked}
+          blockingTasks={kanban.isTaskBlocked(selectedTaskId).blockingTasks}
+          wouldCreateCycle={(dependsOnTaskId) => kanban.wouldCreateCycle(selectedTaskId, dependsOnTaskId)}
         />
       )}
 
