@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock } from 'lucide-react';
+import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock, Archive } from 'lucide-react';
 import { Task, Priority, TaskStatus } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 
 interface TaskCardProps {
   task: Task;
@@ -19,6 +20,8 @@ interface TaskCardProps {
   isDragging: boolean;
   isBlocked?: boolean;
   blockingTasks?: Task[];
+  onArchive?: () => void;
+  showArchiveButton?: boolean;
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
@@ -37,7 +40,7 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   completed: { label: 'Terminado', color: '#22C55E' },
 };
 
-export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [] }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // Use subtasks for progress calculation
   const subtasks = task.subtasks || [];
@@ -214,6 +217,30 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
               <Paperclip className="w-3 h-3" />
               {task.attachments.length}
             </span>
+          )}
+          
+          {/* Archive Button - only show for completed tasks */}
+          {showArchiveButton && onArchive && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 hover:bg-muted"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchive();
+                    }}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="text-xs">Archivar tarea</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           
           {/* Assignee Avatar */}

@@ -54,6 +54,8 @@ interface KanbanColumnProps {
   // Dependency blocking
   getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
   shouldBlockMoveToColumn?: (taskId: string, targetColumnId: string) => { blocked: boolean; reason: string; blockingTasks: Task[] };
+  // Archive functionality
+  onArchiveTask?: (taskId: string) => void;
 }
 
 export function KanbanColumn({
@@ -75,6 +77,7 @@ export function KanbanColumn({
   wouldExceedWipLimit = false,
   getTaskBlockedStatus,
   shouldBlockMoveToColumn,
+  onArchiveTask,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -336,6 +339,8 @@ export function KanbanColumn({
                 isDragging={draggedTaskId === task.id}
                 isBlocked={blockStatus.blocked}
                 blockingTasks={blockStatus.blockingTasks}
+                showArchiveButton={column.isDoneColumn && onArchiveTask !== undefined}
+                onArchive={onArchiveTask ? () => onArchiveTask(task.id) : undefined}
               />
             </div>
           );
