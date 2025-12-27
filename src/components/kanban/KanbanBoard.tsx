@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2 } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanbanReducer } from '@/hooks/kanban';
@@ -16,6 +16,13 @@ import { SaveIndicator } from './SaveIndicator';
 import { Task, ViewType } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 export function KanbanBoard() {
   const kanban = useKanbanReducer();
@@ -116,6 +123,10 @@ export function KanbanBoard() {
     { id: 'notes' as ViewType, icon: FileText, label: 'Notas' },
   ];
 
+  // Get visible and hidden columns
+  const visibleColumns = kanban.columns.filter(c => !c.isHidden);
+  const hiddenColumns = kanban.columns.filter(c => c.isHidden);
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
@@ -153,6 +164,44 @@ export function KanbanBoard() {
                 <Redo2 className="w-4 h-4" />
               </Button>
             </div>
+            {/* Hidden Columns Menu */}
+            {hiddenColumns.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border gap-2"
+                    title="Columnas ocultas"
+                  >
+                    <EyeOff className="w-4 h-4" />
+                    <span className="text-xs bg-muted-foreground/20 rounded-full px-1.5">
+                      {hiddenColumns.length}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                    Columnas ocultas
+                  </div>
+                  <DropdownMenuSeparator />
+                  {hiddenColumns.map(col => (
+                    <DropdownMenuItem
+                      key={col.id}
+                      onClick={() => kanban.updateColumn(col.id, { isHidden: false })}
+                      className="flex items-center gap-2"
+                    >
+                      <div
+                        className="w-3 h-3 rounded-sm flex-shrink-0"
+                        style={{ backgroundColor: col.color }}
+                      />
+                      <span className="flex-1 truncate">{col.title}</span>
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button
               variant="outline"
               size="icon"
@@ -238,7 +287,7 @@ export function KanbanBoard() {
         {currentView === 'kanban' && (
           <div className="h-full overflow-x-auto overflow-y-hidden scrollbar-thin">
             <div className="flex gap-4 p-6 min-w-max h-full">
-              {kanban.columns.map(column => (
+              {visibleColumns.map(column => (
                 <KanbanColumn
                   key={column.id}
                   column={column}
