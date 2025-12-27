@@ -1,4 +1,4 @@
-import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask, Automation } from '@/types/kanban';
 import { KanbanState } from './kanban.types';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -214,12 +214,52 @@ export function createSeedState(): KanbanState {
     },
   ];
 
+  // Default seed automations (disabled by default)
+  const seedTime = new Date();
+  const seedAutomations: Automation[] = [
+    {
+      id: generateId(),
+      name: 'Subtareas completadas → Mover a Completado',
+      enabled: false,
+      trigger: { type: 'PROGRESS_CHANGED' },
+      conditions: [{ type: 'SUBTASKS_ALL_COMPLETED' }],
+      actions: [{ type: 'MOVE_TO_COLUMN', columnId: 'completed' }],
+      createdAt: seedTime,
+      updatedAt: seedTime,
+    },
+    {
+      id: generateId(),
+      name: 'Prioridad crítica → Añadir etiqueta Urgente',
+      enabled: false,
+      trigger: { type: 'PRIORITY_CHANGED' },
+      conditions: [{ type: 'PRIORITY_IS', value: 'critical' }],
+      actions: [{ type: 'ADD_TAG', tagId: '2' }], // Tag "Urgente"
+      createdAt: seedTime,
+      updatedAt: seedTime,
+    },
+    {
+      id: generateId(),
+      name: 'Fecha límite cercana → Notificar',
+      enabled: false,
+      trigger: { type: 'DUE_DATE_CHANGED' },
+      conditions: [{ type: 'DUE_IN_DAYS_LESS_THAN', value: 2 }],
+      actions: [
+        { type: 'ADD_TAG', tagId: '2' }, // Tag "Urgente"
+        { type: 'NOTIFY_IN_APP', message: 'Tarea próxima a vencer' },
+      ],
+      createdAt: seedTime,
+      updatedAt: seedTime,
+    },
+  ];
+
   return {
     tasks: sampleTasks,
     columns: defaultColumns,
     tags: defaultTags,
     notes: sampleNotes,
     filter: defaultFilter,
-    automations: [],
+    automations: seedAutomations,
+    automationLogs: [],
+    notifications: [],
   };
 }

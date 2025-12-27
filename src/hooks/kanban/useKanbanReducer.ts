@@ -1,9 +1,11 @@
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
-import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
 import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
 import { loadKanbanState, saveKanbanState } from './kanban.storage';
 import { createSeedState } from './kanban.seed';
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // Initialize history state
 function initializeHistory(): HistoryState {
@@ -303,6 +305,30 @@ export function useKanbanReducer() {
     
     // Filter
     setFilter,
+    
+    // Automation actions
+    addAutomation: useCallback((automation: Omit<Automation, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const now = new Date();
+      dispatch({
+        type: 'AUTOMATION_CREATED',
+        payload: { ...automation, id: generateId(), createdAt: now, updatedAt: now },
+      });
+    }, []),
+    updateAutomation: useCallback((automationId: string, updates: Partial<Automation>) => {
+      dispatch({ type: 'AUTOMATION_UPDATED', payload: { automationId, updates } });
+    }, []),
+    deleteAutomation: useCallback((automationId: string) => {
+      dispatch({ type: 'AUTOMATION_DELETED', payload: automationId });
+    }, []),
+    toggleAutomation: useCallback((automationId: string) => {
+      dispatch({ type: 'AUTOMATION_TOGGLED', payload: automationId });
+    }, []),
+    dismissNotification: useCallback((notificationId: string) => {
+      dispatch({ type: 'NOTIFICATION_DISMISSED', payload: notificationId });
+    }, []),
+    clearNotifications: useCallback(() => {
+      dispatch({ type: 'NOTIFICATIONS_CLEARED' });
+    }, []),
     
     // Getters
     getFilteredTasks,

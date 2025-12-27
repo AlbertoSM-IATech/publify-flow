@@ -1,4 +1,4 @@
-import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
 import { KanbanState, HistoryState, KanbanAction } from './kanban.types';
 
 const MAX_HISTORY_LENGTH = 50;
@@ -641,6 +641,104 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
         present: {
           ...present,
           filter: newFilter,
+        },
+      };
+    }
+
+    // ========== AUTOMATION ACTIONS ==========
+    case 'AUTOMATION_CREATED': {
+      const automation = action.payload as Automation;
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          automations: [...present.automations, automation],
+        },
+      };
+    }
+
+    case 'AUTOMATION_UPDATED': {
+      const { automationId, updates } = action.payload as { automationId: string; updates: Partial<Automation> };
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          automations: present.automations.map(a =>
+            a.id === automationId ? { ...a, ...updates, updatedAt: new Date() } : a
+          ),
+        },
+      };
+    }
+
+    case 'AUTOMATION_DELETED': {
+      const automationId = action.payload as string;
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          automations: present.automations.filter(a => a.id !== automationId),
+        },
+      };
+    }
+
+    case 'AUTOMATION_TOGGLED': {
+      const automationId = action.payload as string;
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          automations: present.automations.map(a =>
+            a.id === automationId ? { ...a, enabled: !a.enabled, updatedAt: new Date() } : a
+          ),
+        },
+      };
+    }
+
+    case 'AUTOMATION_LOGS_ADDED': {
+      const logs = action.payload as AutomationExecution[];
+      // Logs don't go to history (not undoable)
+      const MAX_LOGS = 200;
+      return {
+        ...history,
+        present: {
+          ...present,
+          automationLogs: [...logs, ...present.automationLogs].slice(0, MAX_LOGS),
+        },
+      };
+    }
+
+    case 'NOTIFICATION_ADDED': {
+      const notification = action.payload as AutomationNotification;
+      return {
+        ...history,
+        present: {
+          ...present,
+          notifications: [notification, ...present.notifications].slice(0, 50),
+        },
+      };
+    }
+
+    case 'NOTIFICATION_DISMISSED': {
+      const notificationId = action.payload as string;
+      return {
+        ...history,
+        present: {
+          ...present,
+          notifications: present.notifications.filter(n => n.id !== notificationId),
+        },
+      };
+    }
+
+    case 'NOTIFICATIONS_CLEARED': {
+      return {
+        ...history,
+        present: {
+          ...present,
+          notifications: [],
         },
       };
     }
