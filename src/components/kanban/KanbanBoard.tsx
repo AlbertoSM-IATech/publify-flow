@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag, FileText } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Sun, Moon, Tag, FileText, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useKanban } from '@/hooks/useKanban';
+import { useKanbanReducer } from '@/hooks/kanban';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskDetailPanel } from './TaskDetailPanel';
 import { FilterPanel } from './FilterPanel';
@@ -12,11 +12,13 @@ import { TimelineView } from './TimelineView';
 import { NotesView } from './NotesView';
 import { NewTaskDialog } from './NewTaskDialog';
 import { TagManager } from './TagManager';
+import { SaveIndicator } from './SaveIndicator';
 import { Task, ViewType } from '@/types/kanban';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export function KanbanBoard() {
-  const kanban = useKanban();
+  const kanban = useKanbanReducer();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('kanban');
@@ -58,6 +60,26 @@ export function KanbanBoard() {
     setNewTaskColumnId(columnId);
     setShowNewTaskDialog(true);
   }, []);
+
+  // WIP Limit check wrapper for moveTask
+  const handleMoveTask = useCallback((taskId: string, targetColumnId: string, targetIndex: number) => {
+    const task = kanban.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    // Skip WIP check if moving within the same column
+    if (task.columnId !== targetColumnId) {
+      // Check WIP limit
+      if (kanban.wouldExceedWipLimit(targetColumnId)) {
+        const column = kanban.columns.find(c => c.id === targetColumnId);
+        toast.error(`Límite WIP alcanzado`, {
+          description: `La columna "${column?.title}" tiene un límite de ${column?.wipLimit} tareas.`,
+        });
+        return;
+      }
+    }
+    
+    kanban.moveTask(taskId, targetColumnId, targetIndex);
+  }, [kanban]);
 
   // BUG FIX: Task drag handlers - completely isolated from column drag
   const handleDragStart = useCallback((e: React.DragEvent, taskId: string) => {
@@ -113,11 +135,38 @@ export function KanbanBoard() {
       {/* Header */}
       <header className="border-b border-border px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-heading font-semibold text-foreground">Tareas</h1>
-            <p className="text-sm text-muted-foreground">Gestiona tu trabajo de forma visual</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-heading font-semibold text-foreground">Tareas</h1>
+              <p className="text-sm text-muted-foreground">Gestiona tu trabajo de forma visual</p>
+            </div>
+            {/* Save Indicator */}
+            <SaveIndicator status={kanban.saveStatus} />
           </div>
           <div className="flex items-center gap-2">
+            {/* Undo/Redo Buttons */}
+            <div className="flex items-center border border-border rounded-lg overflow-hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={kanban.undo}
+                disabled={!kanban.canUndo}
+                className="rounded-none border-r border-border h-9 w-9"
+                title="Deshacer (Ctrl+Z)"
+              >
+                <Undo2 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={kanban.redo}
+                disabled={!kanban.canRedo}
+                className="rounded-none h-9 w-9"
+                title="Rehacer (Ctrl+Y)"
+              >
+                <Redo2 className="w-4 h-4" />
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="icon"
@@ -220,7 +269,7 @@ export function KanbanBoard() {
                   onOpenNewTaskDialog={() => handleOpenNewTaskDialog(column.id)}
                   onUpdateColumn={(updates) => kanban.updateColumn(column.id, updates)}
                   onDeleteColumn={() => kanban.deleteColumn(column.id)}
-                  onMoveTask={kanban.moveTask}
+                  onMoveTask={handleMoveTask}
                   draggedTaskId={draggedTaskId}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
@@ -229,6 +278,7 @@ export function KanbanBoard() {
                   onColumnDrop={(e) => handleColumnDrop(e, column.id)}
                   isDraggingColumn={draggedColumnId === column.id}
                   isAnyTaskDragging={draggedTaskId !== null}
+                  wouldExceedWipLimit={kanban.wouldExceedWipLimit(column.id)}
                 />
               ))}
               
