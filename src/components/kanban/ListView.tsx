@@ -2,8 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle, Globe, Circle,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, GripVertical
+  TrendingUp, Megaphone, Settings, Check, Folder, GripVertical, Ban
 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Task, Column, Priority, TaskStatus } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -30,6 +36,7 @@ interface ListViewProps {
   columns: Column[];
   onTaskClick: (task: Task) => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
 }
 
 type SortField = 'title' | 'priority' | 'dueDate' | 'createdAt' | 'status' | 'assignee' | 'market' | 'taskStatus';
@@ -70,7 +77,7 @@ const DEFAULT_WIDTHS = {
   tags: 150,
 };
 
-export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListViewProps) {
+export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlockedStatus }: ListViewProps) {
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [columnWidths, setColumnWidths] = useState(DEFAULT_WIDTHS);
@@ -233,13 +240,41 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask }: ListView
                     onClick={() => onTaskClick(task)}
                   >
                     <td className="px-4 py-3" style={{ width: columnWidths.title }}>
-                      <div className="max-w-full">
-                        <p className="font-medium text-foreground truncate">{task.title}</p>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                            {task.description}
-                          </p>
-                        )}
+                      <div className="max-w-full flex items-start gap-2">
+                        {/* Blocked indicator */}
+                        {(() => {
+                          const blockStatus = getTaskBlockedStatus?.(task.id);
+                          if (blockStatus?.blocked) {
+                            return (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-destructive/15 text-destructive border border-destructive/30 flex-shrink-0 mt-0.5">
+                                      <Ban className="w-3 h-3" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs">
+                                    <p className="font-medium mb-1">Bloqueada por:</p>
+                                    <ul className="text-xs space-y-0.5">
+                                      {blockStatus.blockingTasks.map(bt => (
+                                        <li key={bt.id}>• {bt.title}</li>
+                                      ))}
+                                    </ul>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground truncate">{task.title}</p>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                              {task.description}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3" style={{ width: columnWidths.status }}>
