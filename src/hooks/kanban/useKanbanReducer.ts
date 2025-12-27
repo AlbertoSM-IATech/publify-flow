@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
+import { useReducer, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Task, Column, Tag, Note, Filter, Subtask, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
 import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
@@ -7,20 +7,32 @@ import { createSeedState } from './kanban.seed';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Initialize history state
-function initializeHistory(): HistoryState {
-  const stored = loadKanbanState();
-  const initialState = stored || createSeedState();
-  
-  return {
-    past: [],
-    present: initialState,
-    future: [],
-  };
-}
+// Compute initial history once, outside of component
+const computeInitialHistory = (): HistoryState => {
+  try {
+    const stored = loadKanbanState();
+    const initialState = stored || createSeedState();
+    
+    return {
+      past: [],
+      present: initialState,
+      future: [],
+    };
+  } catch (error) {
+    console.error('Error loading kanban state:', error);
+    return {
+      past: [],
+      present: createSeedState(),
+      future: [],
+    };
+  }
+};
+
+// Cache the initial state to prevent re-computation
+const cachedInitialHistory = computeInitialHistory();
 
 export function useKanbanReducer() {
-  const [history, dispatch] = useReducer(kanbanReducer, null, initializeHistory);
+  const [history, dispatch] = useReducer(kanbanReducer, cachedInitialHistory);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSavedRef = useRef<string>('');

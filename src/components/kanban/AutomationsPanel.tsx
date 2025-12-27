@@ -127,10 +127,7 @@ export function AutomationsPanel({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={automation.enabled}
-                        onCheckedChange={(e) => {
-                          e.stopPropagation?.();
-                          onToggle(automation.id);
-                        }}
+                        onCheckedChange={() => onToggle(automation.id)}
                         onClick={(e) => e.stopPropagation()}
                       />
                       <Button
