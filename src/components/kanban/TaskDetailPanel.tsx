@@ -193,9 +193,11 @@ export function TaskDetailPanel({
     }
   };
 
-  const completedChecklist = task.checklist.filter(item => item.completed).length;
-  const checklistProgress = task.checklist.length > 0 
-    ? (completedChecklist / task.checklist.length) * 100 
+  // Use subtasks instead of checklist
+  const subtasks = task.subtasks || [];
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const subtaskProgress = subtasks.length > 0 
+    ? (completedSubtasks / subtasks.length) * 100 
     : 0;
 
   const currentStatus = statusOptions.find(s => s.value === task.status) || statusOptions[0];
@@ -520,50 +522,58 @@ export function TaskDetailPanel({
               />
             </div>
 
-            {/* Checklist */}
+            {/* Subtasks */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <CheckSquare className="w-4 h-4" />
-                  Checklist
+                  Subtareas
                 </label>
-                {task.checklist.length > 0 && (
+                {subtasks.length > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    {completedChecklist}/{task.checklist.length} ({Math.round(checklistProgress)}%)
+                    {completedSubtasks}/{subtasks.length} ({Math.round(subtaskProgress)}%)
                   </span>
                 )}
               </div>
               
-              {task.checklist.length > 0 && (
+              {subtasks.length > 0 && (
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-primary transition-all duration-300 rounded-full"
-                    style={{ width: `${checklistProgress}%` }}
+                    className={cn(
+                      "h-full transition-all duration-300 rounded-full",
+                      subtaskProgress === 100 ? "bg-green-500" : "bg-primary"
+                    )}
+                    style={{ width: `${subtaskProgress}%` }}
                   />
                 </div>
               )}
 
               <div className="space-y-2">
-                {task.checklist.map(item => (
+                {subtasks.map(subtask => (
                   <div
-                    key={item.id}
+                    key={subtask.id}
                     className="flex items-center gap-3 group p-2 rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <Checkbox
-                      checked={item.completed}
-                      onCheckedChange={() => onToggleChecklistItem(item.id)}
+                      checked={subtask.completed}
+                      onCheckedChange={() => onToggleChecklistItem(subtask.id)}
                     />
                     <span className={cn(
                       "flex-1 text-sm",
-                      item.completed && "line-through text-muted-foreground"
+                      subtask.completed && "line-through text-muted-foreground"
                     )}>
-                      {item.text}
+                      {subtask.title}
                     </span>
+                    {subtask.assignedTo && (
+                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        {subtask.assignedTo}
+                      </span>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                      onClick={() => onDeleteChecklistItem(item.id)}
+                      onClick={() => onDeleteChecklistItem(subtask.id)}
                     >
                       <X className="w-3 h-3" />
                     </Button>
@@ -575,7 +585,7 @@ export function TaskDetailPanel({
                 <Input
                   value={newChecklistItem}
                   onChange={(e) => setNewChecklistItem(e.target.value)}
-                  placeholder="Añadir elemento..."
+                  placeholder="Añadir subtarea..."
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleAddChecklistItem();
                   }}

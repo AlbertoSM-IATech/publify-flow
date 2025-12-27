@@ -2,10 +2,21 @@ export type Priority = 'low' | 'medium' | 'high' | 'critical';
 export type TaskStatus = 'not_started' | 'in_progress' | 'paused' | 'waiting' | 'archived' | 'completed';
 export type ViewType = 'kanban' | 'list' | 'calendar' | 'timeline' | 'notes';
 
+// Legacy checklist item - kept for migration compatibility
 export interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+}
+
+// New hierarchical subtask with full properties
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  assignedTo?: string | null;
+  dueDate?: Date | null;
+  createdAt: Date;
 }
 
 export interface Tag {
@@ -26,7 +37,9 @@ export interface Task {
   startDate: Date | null;
   createdAt: Date;
   assignee: string | null;
+  /** @deprecated Use subtasks instead */
   checklist: ChecklistItem[];
+  subtasks: Subtask[];
   estimatedTime: number | null;
   actualTime: number | null;
   relatedBook: string | null;

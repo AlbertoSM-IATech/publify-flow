@@ -1,4 +1,4 @@
-import { Task, Column, Tag, Note, Filter, Automation } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
 import { KanbanState } from './kanban.types';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -36,6 +36,18 @@ const defaultFilter: Filter = {
   showArchived: false,
 };
 
+// Helper to create subtask from checklist item (migration)
+function createSubtask(text: string, completed: boolean): Subtask {
+  return {
+    id: generateId(),
+    title: text,
+    completed,
+    assignedTo: null,
+    dueDate: null,
+    createdAt: new Date(),
+  };
+}
+
 export function createSeedState(): KanbanState {
   const now = new Date();
   
@@ -52,11 +64,12 @@ export function createSeedState(): KanbanState {
       startDate: now,
       createdAt: now,
       assignee: 'Ana García',
-      checklist: [
-        { id: '1', text: 'Investigación de nicho', completed: true },
-        { id: '2', text: 'Análisis KWs primarias', completed: true },
-        { id: '3', text: 'Revisión de competencia', completed: false },
-        { id: '4', text: 'Análisis BSRs y Pricing', completed: false },
+      checklist: [],
+      subtasks: [
+        createSubtask('Investigación de nicho', true),
+        createSubtask('Análisis KWs primarias', true),
+        createSubtask('Revisión de competencia', false),
+        createSubtask('Análisis BSRs y Pricing', false),
       ],
       estimatedTime: 8,
       actualTime: 4,
@@ -79,10 +92,11 @@ export function createSeedState(): KanbanState {
       startDate: now,
       createdAt: now,
       assignee: 'Carlos López',
-      checklist: [
-        { id: '1', text: 'Definir estructura', completed: true },
-        { id: '2', text: 'Crear outline (TOC)', completed: false },
-        { id: '3', text: 'Definir número de páginas', completed: false },
+      checklist: [],
+      subtasks: [
+        createSubtask('Definir estructura', true),
+        createSubtask('Crear outline (TOC)', false),
+        createSubtask('Definir número de páginas', false),
       ],
       estimatedTime: 6,
       actualTime: null,
@@ -105,12 +119,13 @@ export function createSeedState(): KanbanState {
       startDate: now,
       createdAt: now,
       assignee: 'María Sánchez',
-      checklist: [
-        { id: '1', text: 'Capítulo 1', completed: true },
-        { id: '2', text: 'Capítulo 2', completed: true },
-        { id: '3', text: 'Capítulo 3', completed: false },
-        { id: '4', text: 'Capítulo 4', completed: false },
-        { id: '5', text: 'Capítulo 5', completed: false },
+      checklist: [],
+      subtasks: [
+        createSubtask('Capítulo 1', true),
+        createSubtask('Capítulo 2', true),
+        createSubtask('Capítulo 3', false),
+        createSubtask('Capítulo 4', false),
+        createSubtask('Capítulo 5', false),
       ],
       estimatedTime: 24,
       actualTime: 10,
@@ -133,10 +148,11 @@ export function createSeedState(): KanbanState {
       startDate: now,
       createdAt: now,
       assignee: 'Pedro Ruiz',
-      checklist: [
-        { id: '1', text: 'Diseñar portada frontal', completed: true },
-        { id: '2', text: 'Diseñar lomo', completed: false },
-        { id: '3', text: 'Diseñar contraportada', completed: false },
+      checklist: [],
+      subtasks: [
+        createSubtask('Diseñar portada frontal', true),
+        createSubtask('Diseñar lomo', false),
+        createSubtask('Diseñar contraportada', false),
       ],
       estimatedTime: 12,
       actualTime: 6,
@@ -159,11 +175,12 @@ export function createSeedState(): KanbanState {
       startDate: now,
       createdAt: now,
       assignee: 'Ana García',
-      checklist: [
-        { id: '1', text: 'Subir manuscrito', completed: false },
-        { id: '2', text: 'Subir portada', completed: false },
-        { id: '3', text: 'Configurar metadata', completed: false },
-        { id: '4', text: 'Seleccionar categorías', completed: false },
+      checklist: [],
+      subtasks: [
+        createSubtask('Subir manuscrito', false),
+        createSubtask('Subir portada', false),
+        createSubtask('Configurar metadata', false),
+        createSubtask('Seleccionar categorías', false),
       ],
       estimatedTime: 4,
       actualTime: null,

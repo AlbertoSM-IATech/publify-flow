@@ -29,6 +29,12 @@ export type KanbanActionType =
   | 'NOTE_UPDATED'
   | 'NOTE_DELETED'
   | 'FILTER_UPDATED'
+  // Subtask actions
+  | 'SUBTASK_CREATED'
+  | 'SUBTASK_UPDATED'
+  | 'SUBTASK_TOGGLED'
+  | 'SUBTASK_DELETED'
+  // Legacy checklist (deprecated, kept for compatibility)
   | 'CHECKLIST_ITEM_ADDED'
   | 'CHECKLIST_ITEM_TOGGLED'
   | 'CHECKLIST_ITEM_DELETED'
