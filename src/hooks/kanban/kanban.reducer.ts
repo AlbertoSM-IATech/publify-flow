@@ -480,6 +480,13 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
 
     case 'COLUMN_DELETED': {
       const columnId = action.payload as string;
+      
+      // Prevent deletion of system columns
+      const columnToDelete = present.columns.find(c => c.id === columnId);
+      if (columnToDelete?.isSystemColumn) {
+        return history; // Do nothing for system columns
+      }
+      
       const historyWithPast = pushToHistory(history);
       
       // Find first column that isn't being deleted
