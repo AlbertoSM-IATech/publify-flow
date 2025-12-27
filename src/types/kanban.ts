@@ -25,6 +25,16 @@ export interface Tag {
   color: string;
 }
 
+// Dependency types - Phase 7
+export type DependencyType = 'FS'; // Finish-to-Start (only type for now)
+
+export interface TaskDependency {
+  id: string;
+  type: DependencyType;
+  dependsOnTaskId: string; // prerequisite task ID
+  createdAt: Date;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -45,7 +55,10 @@ export interface Task {
   relatedBook: string | null;
   relatedMarket: string | null;
   attachments: string[];
+  /** @deprecated Use taskDependencies instead */
   dependencies: string[];
+  /** Task dependencies with full metadata */
+  taskDependencies?: TaskDependency[];
   order: number;
   isArchived: boolean;
 }
@@ -58,6 +71,8 @@ export interface Column {
   wipLimit: number | null;
   order: number;
   isHidden: boolean;
+  /** Marks this column as the "done" column for blocking logic */
+  isDoneColumn?: boolean;
 }
 
 export interface Filter {

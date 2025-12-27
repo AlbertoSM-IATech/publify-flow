@@ -1,5 +1,6 @@
-import { Task, Column, Tag, Note, Filter, Subtask, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask, Automation, AutomationExecution, AutomationNotification, TaskDependency } from '@/types/kanban';
 import { KanbanState, HistoryState, KanbanAction } from './kanban.types';
+import { wouldCreateCycle } from './kanban.dependencies';
 
 const MAX_HISTORY_LENGTH = 50;
 
@@ -641,6 +642,63 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
         present: {
           ...present,
           filter: newFilter,
+        },
+      };
+    }
+
+    // ========== DEPENDENCY ACTIONS (Phase 7) ==========
+    case 'DEPENDENCY_ADDED': {
+      const { taskId, dependsOnTaskId } = action.payload as { taskId: string; dependsOnTaskId: string };
+      
+      // Validate: prevent self-dependency
+      if (taskId === dependsOnTaskId) return history;
+      
+      // Validate: prevent cycles
+      if (wouldCreateCycle(taskId, dependsOnTaskId, present)) return history;
+      
+      const task = present.tasks.find(t => t.id === taskId);
+      if (!task) return history;
+      
+      // Check if dependency already exists
+      const existingDeps = task.taskDependencies || [];
+      if (existingDeps.some(d => d.dependsOnTaskId === dependsOnTaskId)) return history;
+      
+      const newDependency: TaskDependency = {
+        id: generateId(),
+        type: 'FS',
+        dependsOnTaskId,
+        createdAt: new Date(),
+      };
+      
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(t =>
+            t.id === taskId
+              ? { ...t, taskDependencies: [...(t.taskDependencies || []), newDependency] }
+              : t
+          ),
+        },
+      };
+    }
+
+    case 'DEPENDENCY_REMOVED': {
+      const { taskId, dependencyId } = action.payload as { taskId: string; dependencyId: string };
+      const task = present.tasks.find(t => t.id === taskId);
+      if (!task) return history;
+      
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(t =>
+            t.id === taskId
+              ? { ...t, taskDependencies: (t.taskDependencies || []).filter(d => d.id !== dependencyId) }
+              : t
+          ),
         },
       };
     }

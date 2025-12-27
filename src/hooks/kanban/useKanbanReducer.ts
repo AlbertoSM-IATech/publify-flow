@@ -4,6 +4,7 @@ import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
 import { loadKanbanState, saveKanbanState } from './kanban.storage';
 import { createSeedState } from './kanban.seed';
+import { isTaskBlocked, shouldBlockMoveToColumn, wouldCreateCycle } from './kanban.dependencies';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -341,6 +342,27 @@ export function useKanbanReducer() {
     clearNotifications: useCallback(() => {
       dispatch({ type: 'NOTIFICATIONS_CLEARED' });
     }, []),
+    
+    // Dependency actions (Phase 7)
+    addDependency: useCallback((taskId: string, dependsOnTaskId: string) => {
+      dispatch({ type: 'DEPENDENCY_ADDED', payload: { taskId, dependsOnTaskId } });
+    }, []),
+    removeDependency: useCallback((taskId: string, dependencyId: string) => {
+      dispatch({ type: 'DEPENDENCY_REMOVED', payload: { taskId, dependencyId } });
+    }, []),
+    isTaskBlocked: useCallback((taskId: string) => {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return { blocked: false, blockingTaskIds: [], blockingTasks: [] };
+      return isTaskBlocked(task, state);
+    }, [state]),
+    shouldBlockMoveToColumn: useCallback((taskId: string, targetColumnId: string) => {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return { blocked: false, reason: '', blockingTasks: [] };
+      return shouldBlockMoveToColumn(task, targetColumnId, state);
+    }, [state]),
+    wouldCreateCycle: useCallback((taskId: string, dependsOnTaskId: string) => {
+      return wouldCreateCycle(taskId, dependsOnTaskId, state);
+    }, [state]),
     
     // Getters
     getFilteredTasks,

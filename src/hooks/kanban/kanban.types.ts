@@ -1,4 +1,4 @@
-import { Task, Column, Tag, Note, Filter, Automation, AutomationExecution, AutomationNotification } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Automation, AutomationExecution, AutomationNotification, TaskDependency } from '@/types/kanban';
 
 export interface KanbanState {
   tasks: Task[];
@@ -36,6 +36,9 @@ export type KanbanActionType =
   | 'SUBTASK_UPDATED'
   | 'SUBTASK_TOGGLED'
   | 'SUBTASK_DELETED'
+  // Dependency actions (Phase 7)
+  | 'DEPENDENCY_ADDED'
+  | 'DEPENDENCY_REMOVED'
   // Automation actions
   | 'AUTOMATION_CREATED'
   | 'AUTOMATION_UPDATED'

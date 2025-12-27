@@ -1,8 +1,8 @@
 import { KanbanState } from './kanban.types';
-import { Task, Column, Tag, Note, Filter, Automation, Subtask, ChecklistItem } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Automation, Subtask, ChecklistItem, TaskDependency } from '@/types/kanban';
 
-const STORAGE_KEY = 'publify.kanban.v2'; // Bumped version for subtask migration
-const STORAGE_VERSION = 2;
+const STORAGE_KEY = 'publify.kanban.v3'; // Bumped version for dependency migration
+const STORAGE_VERSION = 3;
 
 interface StoragePayload {
   version: number;
@@ -20,12 +20,21 @@ interface SerializedSubtask {
   createdAt: string;
 }
 
+// Serialized dependency with ISO date string
+interface SerializedDependency {
+  id: string;
+  type: 'FS';
+  dependsOnTaskId: string;
+  createdAt: string;
+}
+
 // Serialized versions with ISO date strings instead of Date objects
-interface SerializedTask extends Omit<Task, 'createdAt' | 'dueDate' | 'startDate' | 'subtasks'> {
+interface SerializedTask extends Omit<Task, 'createdAt' | 'dueDate' | 'startDate' | 'subtasks' | 'taskDependencies'> {
   createdAt: string;
   dueDate: string | null;
   startDate: string | null;
   subtasks: SerializedSubtask[];
+  taskDependencies?: SerializedDependency[];
 }
 
 interface SerializedNote extends Omit<Note, 'createdAt' | 'updatedAt'> {
@@ -75,6 +84,18 @@ function migrateChecklistToSubtasks(checklist: ChecklistItem[]): Subtask[] {
   }));
 }
 
+// Migrate legacy string[] dependencies to TaskDependency[]
+function migrateLegacyDependencies(dependencies: string[]): TaskDependency[] {
+  if (!dependencies || dependencies.length === 0) return [];
+  
+  return dependencies.map(depId => ({
+    id: generateId(),
+    type: 'FS' as const,
+    dependsOnTaskId: depId,
+    createdAt: new Date(),
+  }));
+}
+
 // Serialize subtasks for storage
 function serializeSubtasks(subtasks: Subtask[]): SerializedSubtask[] {
   if (!subtasks) return [];
@@ -95,6 +116,24 @@ function deserializeSubtasks(serialized: SerializedSubtask[]): Subtask[] {
   }));
 }
 
+// Serialize dependencies for storage
+function serializeDependencies(deps: TaskDependency[] | undefined): SerializedDependency[] {
+  if (!deps) return [];
+  return deps.map(dep => ({
+    ...dep,
+    createdAt: serializeDate(dep.createdAt) as string,
+  }));
+}
+
+// Deserialize dependencies from storage
+function deserializeDependencies(serialized: SerializedDependency[] | undefined): TaskDependency[] {
+  if (!serialized) return [];
+  return serialized.map(dep => ({
+    ...dep,
+    createdAt: deserializeDate(dep.createdAt) as Date,
+  }));
+}
+
 // Serialize the entire state for storage
 function serializeState(state: KanbanState): SerializedKanbanState {
   return {
@@ -104,6 +143,7 @@ function serializeState(state: KanbanState): SerializedKanbanState {
       dueDate: serializeDate(task.dueDate),
       startDate: serializeDate(task.startDate),
       subtasks: serializeSubtasks(task.subtasks || []),
+      taskDependencies: serializeDependencies(task.taskDependencies),
     })),
     columns: state.columns,
     tags: state.tags,
@@ -150,6 +190,12 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
       if (task.checklist && task.checklist.length > 0 && subtasks.length === 0) {
         subtasks = migrateChecklistToSubtasks(task.checklist);
       }
+
+      // Migrate legacy string[] dependencies to TaskDependency[]
+      let taskDependencies = deserializeDependencies((task as any).taskDependencies);
+      if (task.dependencies && task.dependencies.length > 0 && taskDependencies.length === 0) {
+        taskDependencies = migrateLegacyDependencies(task.dependencies);
+      }
       
       return {
         ...task,
@@ -157,10 +203,15 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
         dueDate: deserializeDate(task.dueDate),
         startDate: deserializeDate(task.startDate),
         subtasks,
+        taskDependencies,
         checklist: task.checklist || [], // Keep for backwards compatibility
       };
     }),
-    columns: serialized.columns,
+    columns: serialized.columns.map(col => ({
+      ...col,
+      // Ensure isDoneColumn is set for backward compatibility
+      isDoneColumn: col.isDoneColumn ?? (col.id === 'completed' || col.title.toLowerCase().includes('completado') || col.title.toLowerCase().includes('done')),
+    })),
     tags: serialized.tags,
     notes: serialized.notes.map(note => ({
       ...note,
@@ -194,23 +245,31 @@ export function saveKanbanState(state: KanbanState): void {
   }
 }
 
-// Load state from localStorage with v1 migration support
+// Load state from localStorage with migration support
 export function loadKanbanState(): KanbanState | null {
   try {
-    // Try v2 first
+    // Try v3 first
     let stored = localStorage.getItem(STORAGE_KEY);
     
-    // If no v2, try to migrate from v1
+    // If no v3, try v2
     if (!stored) {
+      const v2Stored = localStorage.getItem('publify.kanban.v2');
+      if (v2Stored) {
+        console.log('[Kanban Storage] Migrating from v2 to v3...');
+        const v2Payload = JSON.parse(v2Stored);
+        const migratedState = deserializeState(v2Payload.data);
+        saveKanbanState(migratedState);
+        localStorage.removeItem('publify.kanban.v2');
+        return migratedState;
+      }
+      
+      // Try v1
       const v1Stored = localStorage.getItem('publify.kanban.v1');
       if (v1Stored) {
-        console.log('[Kanban Storage] Migrating from v1 to v2...');
+        console.log('[Kanban Storage] Migrating from v1 to v3...');
         const v1Payload = JSON.parse(v1Stored);
-        // Deserialize with migration
         const migratedState = deserializeState(v1Payload.data);
-        // Save as v2
         saveKanbanState(migratedState);
-        // Remove old v1
         localStorage.removeItem('publify.kanban.v1');
         return migratedState;
       }
@@ -237,6 +296,7 @@ export function loadKanbanState(): KanbanState | null {
 export function clearKanbanState(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('publify.kanban.v2');
     localStorage.removeItem('publify.kanban.v1');
   } catch (error) {
     console.error('[Kanban Storage] Error clearing state:', error);
@@ -247,6 +307,7 @@ export function clearKanbanState(): void {
 export function hasStoredState(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) !== null || 
+           localStorage.getItem('publify.kanban.v2') !== null ||
            localStorage.getItem('publify.kanban.v1') !== null;
   } catch {
     return false;
