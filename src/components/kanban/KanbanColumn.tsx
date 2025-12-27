@@ -48,6 +48,7 @@ interface KanbanColumnProps {
   onColumnDrop: (e: React.DragEvent) => void;
   isDraggingColumn: boolean;
   isAnyTaskDragging: boolean;
+  wouldExceedWipLimit?: boolean;
 }
 
 export function KanbanColumn({
@@ -66,6 +67,7 @@ export function KanbanColumn({
   onColumnDrop,
   isDraggingColumn,
   isAnyTaskDragging,
+  wouldExceedWipLimit = false,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -175,6 +177,7 @@ export function KanbanColumn({
   };
 
   const isOverWipLimit = column.wipLimit !== null && tasks.length >= column.wipLimit;
+  const showWipWarning = wouldExceedWipLimit && draggedTaskId !== null;
   const columnIcon = iconMap[column.icon] || <Folder className="w-4 h-4" />;
 
   // Visual indicator for column drop target
@@ -186,7 +189,8 @@ export function KanbanColumn({
       className={cn(
         "kanban-column transition-all duration-200 overflow-hidden relative",
         isDraggingColumn && "opacity-50 scale-95 ring-2 ring-primary/50",
-        isColumnDropTarget && !isDraggingColumn && !isAnyTaskDragging && "ring-2 ring-primary/50"
+        isColumnDropTarget && !isDraggingColumn && !isAnyTaskDragging && "ring-2 ring-primary/50",
+        showWipWarning && "ring-2 ring-destructive/50 bg-destructive/5"
       )}
       onDragOver={(e) => {
         handleColumnDragOver(e);

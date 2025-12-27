@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, AlertCircle, Tag, User, X } from 'lucide-react';
 import { Task, Priority, Tag as TagType } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,20 @@ export function NewTaskDialog({
   const [dueDate, setDueDate] = useState<string>('');
   const [assignee, setAssignee] = useState('');
   const [selectedTags, setSelectedTags] = useState<TagType[]>([]);
+
+  // FIX: Sync selectedColumnId when dialog opens, defaultColumnId changes, or columns change
+  useEffect(() => {
+    if (open) {
+      // Validate that the columnId exists
+      const columnExists = columns.some(col => col.id === defaultColumnId);
+      if (defaultColumnId && columnExists) {
+        setSelectedColumnId(defaultColumnId);
+      } else if (columns.length > 0) {
+        // Fallback to first available column if defaultColumnId is invalid
+        setSelectedColumnId(columns[0].id);
+      }
+    }
+  }, [open, defaultColumnId, columns]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
