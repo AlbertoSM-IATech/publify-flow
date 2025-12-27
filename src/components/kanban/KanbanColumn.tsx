@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { 
   MoreHorizontal, Plus, GripVertical, Pencil, Trash2, EyeOff,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, Ban
+  TrendingUp, Megaphone, Settings, Check, Folder, Ban, Archive, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Column, Task } from '@/types/kanban';
@@ -31,6 +31,7 @@ const iconMap: Record<string, React.ReactNode> = {
   settings: <Settings className="w-4 h-4" />,
   check: <Check className="w-4 h-4" />,
   folder: <Folder className="w-4 h-4" />,
+  archive: <Archive className="w-4 h-4" />,
 };
 
 interface KanbanColumnProps {
@@ -296,10 +297,17 @@ export function KanbanColumn({
               Ocultar columna
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDeleteColumn} className="text-destructive">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Eliminar columna
-            </DropdownMenuItem>
+            {column.isSystemColumn ? (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                <Lock className="w-4 h-4 mr-2" />
+                Columna del sistema
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={onDeleteColumn} className="text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Eliminar columna
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

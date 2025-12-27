@@ -23,7 +23,8 @@ export const defaultColumns: Column[] = [
   { id: 'post-launch', title: 'Post-Lanzamiento', color: '#10B981', icon: 'trending-up', wipLimit: null, order: 7, isHidden: false },
   { id: 'marketing', title: 'Marketing', color: '#FB923C', icon: 'megaphone', wipLimit: null, order: 8, isHidden: false },
   { id: 'maintenance', title: 'Mantenimiento', color: '#6B7280', icon: 'settings', wipLimit: null, order: 9, isHidden: false },
-  { id: 'completed', title: 'Completado', color: '#22C55E', icon: 'check', wipLimit: null, order: 10, isHidden: false, isDoneColumn: true },
+  { id: 'completed', title: 'Completado', color: '#22C55E', icon: 'check', wipLimit: null, order: 10, isHidden: false, isDoneColumn: true, isSystemColumn: true },
+  { id: 'archived', title: 'Archivado', color: '#9CA3AF', icon: 'archive', wipLimit: null, order: 11, isHidden: false, isSystemColumn: true },
 ];
 
 const defaultFilter: Filter = {

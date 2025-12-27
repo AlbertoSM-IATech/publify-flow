@@ -73,6 +73,8 @@ export interface Column {
   isHidden: boolean;
   /** Marks this column as the "done" column for blocking logic */
   isDoneColumn?: boolean;
+  /** System columns cannot be deleted */
+  isSystemColumn?: boolean;
 }
 
 export interface Filter {
