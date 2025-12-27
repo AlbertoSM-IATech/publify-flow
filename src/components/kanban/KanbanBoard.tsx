@@ -261,6 +261,7 @@ export function KanbanBoard() {
                     const result = kanban.isTaskBlocked(taskId);
                     return { blocked: result.blocked, blockingTasks: result.blockingTasks };
                   }}
+                  shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
                 />
               ))}
               
@@ -282,6 +283,10 @@ export function KanbanBoard() {
             columns={kanban.columns}
             onTaskClick={handleTaskClick}
             onUpdateTask={kanban.updateTask}
+            getTaskBlockedStatus={(taskId) => {
+              const result = kanban.isTaskBlocked(taskId);
+              return { blocked: result.blocked, blockingTasks: result.blockingTasks };
+            }}
           />
         )}
 

@@ -2,8 +2,9 @@ import { useState, useRef } from 'react';
 import { 
   MoreHorizontal, Plus, GripVertical, Pencil, Trash2, EyeOff,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder
+  TrendingUp, Megaphone, Settings, Check, Folder, Ban
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Column, Task } from '@/types/kanban';
 import { TaskCard } from './TaskCard';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ interface KanbanColumnProps {
   wouldExceedWipLimit?: boolean;
   // Dependency blocking
   getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
+  shouldBlockMoveToColumn?: (taskId: string, targetColumnId: string) => { blocked: boolean; reason: string; blockingTasks: Task[] };
 }
 
 export function KanbanColumn({
@@ -71,6 +73,7 @@ export function KanbanColumn({
   isAnyTaskDragging,
   wouldExceedWipLimit = false,
   getTaskBlockedStatus,
+  shouldBlockMoveToColumn,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -130,6 +133,19 @@ export function KanbanColumn({
     const taskId = draggedTaskId || e.dataTransfer.getData('application/x-task-id') || e.dataTransfer.getData('text/plain');
     
     if (taskId && dropIndex !== null) {
+      // Check if move should be blocked due to dependencies
+      if (shouldBlockMoveToColumn) {
+        const blockCheck = shouldBlockMoveToColumn(taskId, column.id);
+        if (blockCheck.blocked) {
+          const blockingNames = blockCheck.blockingTasks.map(t => `"${t.title}"`).join(', ');
+          toast.error('No se puede mover a esta columna', {
+            description: `Tareas bloqueando: ${blockingNames}`,
+            icon: <Ban className="w-4 h-4" />,
+          });
+          setDropIndex(null);
+          return;
+        }
+      }
       onMoveTask(taskId, column.id, dropIndex);
     }
     setDropIndex(null);
