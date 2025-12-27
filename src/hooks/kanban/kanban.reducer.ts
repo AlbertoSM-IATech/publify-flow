@@ -1,9 +1,53 @@
-import { Task, Column, Tag, Note, Filter, Automation, ChecklistItem } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
 import { KanbanState, HistoryState, KanbanAction } from './kanban.types';
 
 const MAX_HISTORY_LENGTH = 50;
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// ========== PROGRESS CALCULATION ==========
+// Pure function to calculate task progress based on subtasks
+export function calculateTaskProgress(task: Task): number {
+  if (!task.subtasks || task.subtasks.length === 0) {
+    // No subtasks: 0% if not started, 100% if completed
+    return task.status === 'completed' ? 100 : 0;
+  }
+  
+  const completed = task.subtasks.filter(s => s.completed).length;
+  return Math.round((completed / task.subtasks.length) * 100);
+}
+
+// Check if all subtasks are completed
+function areAllSubtasksCompleted(task: Task): boolean {
+  if (!task.subtasks || task.subtasks.length === 0) return false;
+  return task.subtasks.every(s => s.completed);
+}
+
+// Check if any subtask is incomplete
+function hasIncompleteSubtasks(task: Task): boolean {
+  if (!task.subtasks || task.subtasks.length === 0) return false;
+  return task.subtasks.some(s => !s.completed);
+}
+
+// Sync task status based on subtasks completion
+function syncTaskStatusWithSubtasks(task: Task): Task {
+  if (!task.subtasks || task.subtasks.length === 0) return task;
+  
+  const allCompleted = areAllSubtasksCompleted(task);
+  const hasIncomplete = hasIncompleteSubtasks(task);
+  
+  // If all subtasks are completed, mark task as completed
+  if (allCompleted && task.status !== 'completed') {
+    return { ...task, status: 'completed' };
+  }
+  
+  // If task is marked completed but has incomplete subtasks, revert to in_progress
+  if (task.status === 'completed' && hasIncomplete) {
+    return { ...task, status: 'in_progress' };
+  }
+  
+  return task;
+}
 
 // Helper to push state to history
 function pushToHistory(history: HistoryState, skipHistory = false): HistoryState {
@@ -71,7 +115,8 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
         startDate: task.startDate || now,
         createdAt: now,
         assignee: task.assignee || null,
-        checklist: task.checklist || [],
+        checklist: [], // Deprecated
+        subtasks: task.subtasks || [],
         estimatedTime: task.estimatedTime || null,
         actualTime: task.actualTime || null,
         relatedBook: task.relatedBook || null,
@@ -98,9 +143,13 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
         ...historyWithPast,
         present: {
           ...present,
-          tasks: present.tasks.map(task =>
-            task.id === taskId ? { ...task, ...updates } : task
-          ),
+          tasks: present.tasks.map(task => {
+            if (task.id !== taskId) return task;
+            let updatedTask = { ...task, ...updates };
+            // Sync status with subtasks if subtasks exist
+            updatedTask = syncTaskStatusWithSubtasks(updatedTask);
+            return updatedTask;
+          }),
         },
       };
     }
@@ -197,11 +246,19 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
       if (!task) return history;
 
       const now = new Date();
+      // Duplicate subtasks with new IDs
+      const duplicatedSubtasks = task.subtasks.map(s => ({
+        ...s,
+        id: generateId(),
+        createdAt: now,
+      }));
+      
       const newTask: Task = {
         ...task,
         id: generateId(),
         title: `${task.title} (copia)`,
         createdAt: now,
+        subtasks: duplicatedSubtasks,
         order: present.tasks.filter(t => t.columnId === task.columnId).length,
         isArchived: false,
       };
@@ -216,9 +273,14 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
       };
     }
 
-    // ========== CHECKLIST ACTIONS ==========
-    case 'CHECKLIST_ITEM_ADDED': {
-      const { taskId, text } = action.payload as { taskId: string; text: string };
+    // ========== SUBTASK ACTIONS ==========
+    case 'SUBTASK_CREATED': {
+      const { taskId, title, assignedTo, dueDate } = action.payload as {
+        taskId: string;
+        title: string;
+        assignedTo?: string;
+        dueDate?: Date;
+      };
       const historyWithPast = pushToHistory(history);
       return {
         ...historyWithPast,
@@ -226,9 +288,111 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
           ...present,
           tasks: present.tasks.map(task => {
             if (task.id !== taskId) return task;
+            const newSubtask: Subtask = {
+              id: generateId(),
+              title,
+              completed: false,
+              assignedTo: assignedTo || null,
+              dueDate: dueDate || null,
+              createdAt: new Date(),
+            };
+            const updatedTask = {
+              ...task,
+              subtasks: [...task.subtasks, newSubtask],
+            };
+            return syncTaskStatusWithSubtasks(updatedTask);
+          }),
+        },
+      };
+    }
+
+    case 'SUBTASK_UPDATED': {
+      const { taskId, subtaskId, updates } = action.payload as {
+        taskId: string;
+        subtaskId: string;
+        updates: Partial<Subtask>;
+      };
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(task => {
+            if (task.id !== taskId) return task;
+            const updatedTask = {
+              ...task,
+              subtasks: task.subtasks.map(s =>
+                s.id === subtaskId ? { ...s, ...updates } : s
+              ),
+            };
+            return syncTaskStatusWithSubtasks(updatedTask);
+          }),
+        },
+      };
+    }
+
+    case 'SUBTASK_TOGGLED': {
+      const { taskId, subtaskId } = action.payload as { taskId: string; subtaskId: string };
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(task => {
+            if (task.id !== taskId) return task;
+            const updatedTask = {
+              ...task,
+              subtasks: task.subtasks.map(s =>
+                s.id === subtaskId ? { ...s, completed: !s.completed } : s
+              ),
+            };
+            return syncTaskStatusWithSubtasks(updatedTask);
+          }),
+        },
+      };
+    }
+
+    case 'SUBTASK_DELETED': {
+      const { taskId, subtaskId } = action.payload as { taskId: string; subtaskId: string };
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(task => {
+            if (task.id !== taskId) return task;
+            const updatedTask = {
+              ...task,
+              subtasks: task.subtasks.filter(s => s.id !== subtaskId),
+            };
+            return syncTaskStatusWithSubtasks(updatedTask);
+          }),
+        },
+      };
+    }
+
+    // ========== LEGACY CHECKLIST ACTIONS (deprecated, kept for compatibility) ==========
+    case 'CHECKLIST_ITEM_ADDED': {
+      const { taskId, text } = action.payload as { taskId: string; text: string };
+      // Redirect to subtask creation
+      const historyWithPast = pushToHistory(history);
+      return {
+        ...historyWithPast,
+        present: {
+          ...present,
+          tasks: present.tasks.map(task => {
+            if (task.id !== taskId) return task;
+            const newSubtask: Subtask = {
+              id: generateId(),
+              title: text,
+              completed: false,
+              assignedTo: null,
+              dueDate: null,
+              createdAt: new Date(),
+            };
             return {
               ...task,
-              checklist: [...task.checklist, { id: generateId(), text, completed: false }],
+              subtasks: [...task.subtasks, newSubtask],
             };
           }),
         },
@@ -237,6 +401,7 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
 
     case 'CHECKLIST_ITEM_TOGGLED': {
       const { taskId, itemId } = action.payload as { taskId: string; itemId: string };
+      // Redirect to subtask toggle
       const historyWithPast = pushToHistory(history);
       return {
         ...historyWithPast,
@@ -244,12 +409,13 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
           ...present,
           tasks: present.tasks.map(task => {
             if (task.id !== taskId) return task;
-            return {
+            const updatedTask = {
               ...task,
-              checklist: task.checklist.map(item =>
-                item.id === itemId ? { ...item, completed: !item.completed } : item
+              subtasks: task.subtasks.map(s =>
+                s.id === itemId ? { ...s, completed: !s.completed } : s
               ),
             };
+            return syncTaskStatusWithSubtasks(updatedTask);
           }),
         },
       };
@@ -257,6 +423,7 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
 
     case 'CHECKLIST_ITEM_DELETED': {
       const { taskId, itemId } = action.payload as { taskId: string; itemId: string };
+      // Redirect to subtask deletion
       const historyWithPast = pushToHistory(history);
       return {
         ...historyWithPast,
@@ -264,10 +431,11 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
           ...present,
           tasks: present.tasks.map(task => {
             if (task.id !== taskId) return task;
-            return {
+            const updatedTask = {
               ...task,
-              checklist: task.checklist.filter(item => item.id !== itemId),
+              subtasks: task.subtasks.filter(s => s.id !== itemId),
             };
+            return syncTaskStatusWithSubtasks(updatedTask);
           }),
         },
       };

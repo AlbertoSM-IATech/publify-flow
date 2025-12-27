@@ -31,9 +31,11 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
 
 export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const completedChecklist = task.checklist.filter(item => item.completed).length;
-  const totalChecklist = task.checklist.length;
-  const checklistProgress = totalChecklist > 0 ? (completedChecklist / totalChecklist) * 100 : 0;
+  // Use subtasks for progress calculation
+  const subtasks = task.subtasks || [];
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const totalSubtasks = subtasks.length;
+  const subtaskProgress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
   
   const isOverdue = task.dueDate && isBefore(new Date(task.dueDate), startOfDay(new Date()));
   const isDueSoon = task.dueDate && !isOverdue && isBefore(new Date(task.dueDate), new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
@@ -119,20 +121,23 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
         </p>
       )}
 
-      {/* Checklist Progress */}
-      {totalChecklist > 0 && (
+      {/* Subtask Progress */}
+      {totalSubtasks > 0 && (
         <div className="mb-3">
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
             <span className="flex items-center gap-1">
               <CheckSquare className="w-3 h-3" />
-              {completedChecklist}/{totalChecklist}
+              {completedSubtasks}/{totalSubtasks}
             </span>
-            <span>{Math.round(checklistProgress)}%</span>
+            <span>{Math.round(subtaskProgress)}%</span>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-primary transition-all duration-300 rounded-full"
-              style={{ width: `${checklistProgress}%` }}
+              className={cn(
+                "h-full transition-all duration-300 rounded-full",
+                subtaskProgress === 100 ? "bg-green-500" : "bg-primary"
+              )}
+              style={{ width: `${subtaskProgress}%` }}
             />
           </div>
         </div>

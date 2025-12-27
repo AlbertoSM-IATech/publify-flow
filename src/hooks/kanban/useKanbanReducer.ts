@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
-import { Task, Column, Tag, Note, Filter } from '@/types/kanban';
+import { Task, Column, Tag, Note, Filter, Subtask } from '@/types/kanban';
 import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
 import { loadKanbanState, saveKanbanState } from './kanban.storage';
@@ -116,7 +116,24 @@ export function useKanbanReducer() {
     dispatch({ type: 'TASK_DUPLICATED', payload: taskId });
   }, []);
 
-  // Checklist actions
+  // Subtask actions
+  const addSubtask = useCallback((taskId: string, title: string, assignedTo?: string, dueDate?: Date) => {
+    dispatch({ type: 'SUBTASK_CREATED', payload: { taskId, title, assignedTo, dueDate } });
+  }, []);
+
+  const updateSubtask = useCallback((taskId: string, subtaskId: string, updates: Partial<Subtask>) => {
+    dispatch({ type: 'SUBTASK_UPDATED', payload: { taskId, subtaskId, updates } });
+  }, []);
+
+  const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
+    dispatch({ type: 'SUBTASK_TOGGLED', payload: { taskId, subtaskId } });
+  }, []);
+
+  const deleteSubtask = useCallback((taskId: string, subtaskId: string) => {
+    dispatch({ type: 'SUBTASK_DELETED', payload: { taskId, subtaskId } });
+  }, []);
+
+  // Legacy checklist actions (deprecated, redirect to subtasks)
   const addChecklistItem = useCallback((taskId: string, text: string) => {
     dispatch({ type: 'CHECKLIST_ITEM_ADDED', payload: { taskId, text } });
   }, []);
@@ -257,7 +274,13 @@ export function useKanbanReducer() {
     unarchiveTask,
     duplicateTask,
     
-    // Checklist actions
+    // Subtask actions
+    addSubtask,
+    updateSubtask,
+    toggleSubtask,
+    deleteSubtask,
+    
+    // Legacy checklist actions (deprecated)
     addChecklistItem,
     toggleChecklistItem,
     deleteChecklistItem,
