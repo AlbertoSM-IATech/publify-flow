@@ -1,8 +1,14 @@
 import { KanbanState } from './kanban.types';
 import { Task, Column, Tag, Note, Filter, Automation, Subtask, ChecklistItem, TaskDependency } from '@/types/kanban';
 
-const STORAGE_KEY = 'publify.kanban.v3'; // Bumped version for dependency migration
-const STORAGE_VERSION = 3;
+const STORAGE_KEY = 'publify.kanban.v4'; // Bumped version for system columns migration
+const STORAGE_VERSION = 4;
+
+// System columns that must always exist
+const SYSTEM_COLUMNS: Column[] = [
+  { id: 'completed', title: 'Completado', color: '#22C55E', icon: 'check', wipLimit: null, order: 100, isHidden: false, isDoneColumn: true, isSystemColumn: true },
+  { id: 'archived', title: 'Archivado', color: '#9CA3AF', icon: 'archive', wipLimit: null, order: 101, isHidden: false, isSystemColumn: true },
+];
 
 interface StoragePayload {
   version: number;
@@ -163,6 +169,34 @@ function serializeState(state: KanbanState): SerializedKanbanState {
   };
 }
 
+// Ensure system columns exist in the columns array
+function ensureSystemColumns(columns: Column[]): Column[] {
+  const result = [...columns];
+  
+  // Find max order to place system columns at the end
+  const maxOrder = result.reduce((max, col) => Math.max(max, col.order), -1);
+  
+  for (const sysCol of SYSTEM_COLUMNS) {
+    const existingIndex = result.findIndex(c => c.id === sysCol.id);
+    if (existingIndex === -1) {
+      // Add missing system column
+      result.push({
+        ...sysCol,
+        order: maxOrder + 1 + SYSTEM_COLUMNS.indexOf(sysCol),
+      });
+    } else {
+      // Ensure existing column has system flags
+      result[existingIndex] = {
+        ...result[existingIndex],
+        isSystemColumn: true,
+        isDoneColumn: sysCol.isDoneColumn,
+      };
+    }
+  }
+  
+  return result;
+}
+
 // Deserialize the state from storage with migration support
 function deserializeState(serialized: SerializedKanbanState): KanbanState {
   const now = new Date();
@@ -207,11 +241,12 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
         checklist: task.checklist || [], // Keep for backwards compatibility
       };
     }),
-    columns: serialized.columns.map(col => ({
+    columns: ensureSystemColumns(serialized.columns.map(col => ({
       ...col,
       // Ensure isDoneColumn is set for backward compatibility
       isDoneColumn: col.isDoneColumn ?? (col.id === 'completed' || col.title.toLowerCase().includes('completado') || col.title.toLowerCase().includes('done')),
-    })),
+      isSystemColumn: col.isSystemColumn ?? (col.id === 'completed' || col.id === 'archived'),
+    }))),
     tags: serialized.tags,
     notes: serialized.notes.map(note => ({
       ...note,
@@ -248,14 +283,24 @@ export function saveKanbanState(state: KanbanState): void {
 // Load state from localStorage with migration support
 export function loadKanbanState(): KanbanState | null {
   try {
-    // Try v3 first
+    // Try v4 first
     let stored = localStorage.getItem(STORAGE_KEY);
     
-    // If no v3, try v2
+    // If no v4, try v3
     if (!stored) {
+      const v3Stored = localStorage.getItem('publify.kanban.v3');
+      if (v3Stored) {
+        console.log('[Kanban Storage] Migrating from v3 to v4...');
+        const v3Payload = JSON.parse(v3Stored);
+        const migratedState = deserializeState(v3Payload.data);
+        saveKanbanState(migratedState);
+        localStorage.removeItem('publify.kanban.v3');
+        return migratedState;
+      }
+      
       const v2Stored = localStorage.getItem('publify.kanban.v2');
       if (v2Stored) {
-        console.log('[Kanban Storage] Migrating from v2 to v3...');
+        console.log('[Kanban Storage] Migrating from v2 to v4...');
         const v2Payload = JSON.parse(v2Stored);
         const migratedState = deserializeState(v2Payload.data);
         saveKanbanState(migratedState);
@@ -266,7 +311,7 @@ export function loadKanbanState(): KanbanState | null {
       // Try v1
       const v1Stored = localStorage.getItem('publify.kanban.v1');
       if (v1Stored) {
-        console.log('[Kanban Storage] Migrating from v1 to v3...');
+        console.log('[Kanban Storage] Migrating from v1 to v4...');
         const v1Payload = JSON.parse(v1Stored);
         const migratedState = deserializeState(v1Payload.data);
         saveKanbanState(migratedState);
@@ -307,6 +352,7 @@ export function clearKanbanState(): void {
 export function hasStoredState(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) !== null || 
+           localStorage.getItem('publify.kanban.v3') !== null ||
            localStorage.getItem('publify.kanban.v2') !== null ||
            localStorage.getItem('publify.kanban.v1') !== null;
   } catch {
