@@ -394,8 +394,10 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                           width: Math.max(width, dayWidth),
                           backgroundColor: `${priorityColors[task.priority]}20`,
                           borderLeft: `3px solid ${priorityColors[task.priority]}`,
-                          border: `1px solid ${priorityColors[task.priority]}50`,
                           borderLeftWidth: '3px',
+                          // Always-visible outline (was too subtle before)
+                          border: `1px solid ${priorityColors[task.priority]}E6`,
+                          boxShadow: `inset 0 0 0 1px ${priorityColors[task.priority]}80`,
                         }}
                         onClick={() => onTaskClick(task)}
                       >

@@ -1,5 +1,5 @@
-import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock, Archive } from 'lucide-react';
-import { Task, Priority, TaskStatus } from '@/types/kanban';
+import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock, Archive, CornerUpLeft } from 'lucide-react';
+import { Task, Priority, TaskStatus, Column } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -11,6 +11,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface TaskCardProps {
   task: Task;
@@ -22,6 +29,10 @@ interface TaskCardProps {
   blockingTasks?: Task[];
   onArchive?: () => void;
   showArchiveButton?: boolean;
+  // Restore (for Archivado column)
+  showRestoreButton?: boolean;
+  restoreTargetColumns?: Column[];
+  onRestoreToColumn?: (targetColumnId: string) => void;
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
@@ -40,7 +51,7 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   completed: { label: 'Terminado', color: '#22C55E' },
 };
 
-export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false, showRestoreButton = false, restoreTargetColumns = [], onRestoreToColumn }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // Use subtasks for progress calculation
   const subtasks = task.subtasks || [];
@@ -217,6 +228,44 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
               <Paperclip className="w-3 h-3" />
               {task.attachments.length}
             </span>
+          )}
+
+          {/* Restore Button - only show for archived column */}
+          {showRestoreButton && onRestoreToColumn && restoreTargetColumns.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 hover:bg-muted"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CornerUpLeft className="w-3.5 h-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 z-50">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  Restaurar a…
+                </div>
+                <DropdownMenuSeparator />
+                {restoreTargetColumns.map((col) => (
+                  <DropdownMenuItem
+                    key={col.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRestoreToColumn(col.id);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-sm"
+                      style={{ backgroundColor: col.color }}
+                    />
+                    <span className="truncate">{col.title}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           
           {/* Archive Button - only show for completed tasks */}
