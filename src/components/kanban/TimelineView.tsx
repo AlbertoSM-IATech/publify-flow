@@ -42,7 +42,7 @@ const priorityColors: Record<Priority, string> = {
   low: 'hsl(142 71% 45%)',
 };
 
-type ZoomLevel = 'day' | 'week' | 'month';
+type ZoomLevel = 'day';
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -52,7 +52,7 @@ const MONTHS = [
 export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDependencyEdges }: TimelineViewProps) {
   const [startDateInput, setStartDateInput] = useState<Date>(addDays(new Date(), -7));
   const [endDateInput, setEndDateInput] = useState<Date>(addDays(new Date(), 30));
-  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('week');
+  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('day');
   const [draggedTask, setDraggedTask] = useState<{ id: string; type: 'move' | 'resize-start' | 'resize-end' } | null>(null);
   const [dragStartX, setDragStartX] = useState<number>(0);
   const [dragStartDate, setDragStartDate] = useState<Date | null>(null);
@@ -72,22 +72,9 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
     }
   }, []);
 
-  // Calculate date range and day width based on zoom level
+  // Calculate date range and day width
   const { days, dayWidth } = useMemo(() => {
-    let width: number;
-    switch (zoomLevel) {
-      case 'day':
-        width = 60;
-        break;
-      case 'week':
-        width = 30;
-        break;
-      case 'month':
-        width = 15;
-        break;
-      default:
-        width = 30;
-    }
+    const width = 60; // Fixed width for day view
 
     const daysArray: Date[] = [];
     let day = startOfDay(startDateInput);
@@ -98,7 +85,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
     }
 
     return { days: daysArray, dayWidth: width };
-  }, [startDateInput, endDateInput, zoomLevel]);
+  }, [startDateInput, endDateInput]);
 
   // Filter tasks with due dates and calculate their position
   const timelineTasks = useMemo(() => {
@@ -155,37 +142,13 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
   }, [getDependencyEdges, showDependencies, taskRowIndex]);
 
   const handlePrev = () => {
-    switch (zoomLevel) {
-      case 'day':
-        setStartDateInput(addDays(startDateInput, -7));
-        setEndDateInput(addDays(endDateInput, -7));
-        break;
-      case 'week':
-        setStartDateInput(addWeeks(startDateInput, -2));
-        setEndDateInput(addWeeks(endDateInput, -2));
-        break;
-      case 'month':
-        setStartDateInput(subMonths(startDateInput, 1));
-        setEndDateInput(subMonths(endDateInput, 1));
-        break;
-    }
+    setStartDateInput(addDays(startDateInput, -7));
+    setEndDateInput(addDays(endDateInput, -7));
   };
 
   const handleNext = () => {
-    switch (zoomLevel) {
-      case 'day':
-        setStartDateInput(addDays(startDateInput, 7));
-        setEndDateInput(addDays(endDateInput, 7));
-        break;
-      case 'week':
-        setStartDateInput(addWeeks(startDateInput, 2));
-        setEndDateInput(addWeeks(endDateInput, 2));
-        break;
-      case 'month':
-        setStartDateInput(addMonths(startDateInput, 1));
-        setEndDateInput(addMonths(endDateInput, 1));
-        break;
-    }
+    setStartDateInput(addDays(startDateInput, 7));
+    setEndDateInput(addDays(endDateInput, 7));
   };
 
   const handleDragStart = (e: React.MouseEvent, taskId: string, type: 'move' | 'resize-start' | 'resize-end') => {
@@ -274,24 +237,6 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
             />
           </div>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-            {(['day', 'week', 'month'] as ZoomLevel[]).map(level => (
-              <button
-                key={level}
-                onClick={() => setZoomLevel(level)}
-                className={cn(
-                  "px-3 py-1 text-sm rounded-md transition-all capitalize",
-                  zoomLevel === level
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {level === 'day' ? 'Día' : level === 'week' ? 'Semana' : 'Mes'}
-              </button>
-            ))}
-          </div>
-          
           {/* Navigation */}
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handlePrev}>
@@ -326,7 +271,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
         {/* Date Header - Synced scroll with content */}
         <div className="flex border-b border-border flex-shrink-0">
           {/* Fixed task column header */}
-          <div className="w-56 flex-shrink-0 px-3 py-2 border-r border-border bg-muted/50 sticky left-0 z-20">
+          <div className="w-56 min-w-[14rem] flex-shrink-0 px-3 py-2 border-r border-border bg-muted/50 sticky left-0 z-30 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
             <span className="text-sm font-medium text-muted-foreground">Tarea</span>
           </div>
           
@@ -373,6 +318,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
           ref={contentRef}
           className="flex-1 overflow-auto scrollbar-thin relative"
           onScroll={handleScroll}
+          style={{ overflowX: 'auto' }}
         >
           {timelineTasks.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -409,7 +355,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                     <div 
                       ref={taskColumnRef}
                       className={cn(
-                        "w-56 flex-shrink-0 px-3 py-2 border-r border-border bg-card flex items-center sticky left-0 z-10 transition-colors",
+                        "w-56 min-w-[14rem] flex-shrink-0 px-3 py-2 border-r border-border bg-card flex items-center sticky left-0 z-20 transition-colors shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]",
                         isHighlighted && "bg-primary/10"
                       )}
                     >
