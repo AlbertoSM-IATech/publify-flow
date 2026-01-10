@@ -56,6 +56,9 @@ interface KanbanColumnProps {
   shouldBlockMoveToColumn?: (taskId: string, targetColumnId: string) => { blocked: boolean; reason: string; blockingTasks: Task[] };
   // Archive functionality
   onArchiveTask?: (taskId: string) => void;
+  // Restore functionality (for Archivado)
+  restoreTargetColumns?: Column[];
+  onRestoreTask?: (taskId: string, targetColumnId: string) => void;
 }
 
 export function KanbanColumn({
@@ -78,6 +81,8 @@ export function KanbanColumn({
   getTaskBlockedStatus,
   shouldBlockMoveToColumn,
   onArchiveTask,
+  restoreTargetColumns,
+  onRestoreTask,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -341,6 +346,9 @@ export function KanbanColumn({
                 blockingTasks={blockStatus.blockingTasks}
                 showArchiveButton={column.isDoneColumn && onArchiveTask !== undefined}
                 onArchive={onArchiveTask ? () => onArchiveTask(task.id) : undefined}
+                showRestoreButton={column.id === 'archived' && !!onRestoreTask && !!restoreTargetColumns && restoreTargetColumns.length > 0}
+                restoreTargetColumns={restoreTargetColumns}
+                onRestoreToColumn={onRestoreTask ? (targetColumnId) => onRestoreTask(task.id, targetColumnId) : undefined}
               />
             </div>
           );

@@ -318,13 +318,23 @@ export function KanbanBoard() {
                   }}
                   shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
                   onArchiveTask={(taskId) => {
-                    // Move task to archived column
                     const archivedColumn = kanban.columns.find(c => c.id === 'archived');
                     if (archivedColumn) {
                       const tasksInArchived = kanban.getTasksByColumn('archived').length;
                       kanban.moveTask(taskId, 'archived', tasksInArchived);
                       toast.success('Tarea archivada');
                     }
+                  }}
+                  restoreTargetColumns={visibleColumns.filter(c => c.id !== 'archived')}
+                  onRestoreTask={(taskId, targetColumnId) => {
+                    const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
+                    kanban.moveTask(taskId, targetColumnId, tasksInTarget);
+                    // Ensure it becomes visible again even if it was marked isArchived
+                    kanban.updateTask(taskId, {
+                      isArchived: false,
+                      status: targetColumnId === 'completed' ? 'completed' : undefined,
+                    });
+                    toast.success('Tarea restaurada');
                   }}
                 />
               ))}
