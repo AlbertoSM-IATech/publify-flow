@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   ChevronDown, ChevronUp, Calendar, User, Tag, AlertCircle, Globe, Circle,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, GripVertical, Ban
+  TrendingUp, Megaphone, Settings, Check, Folder, GripVertical, Ban, Percent
 } from 'lucide-react';
 import {
   Tooltip,
@@ -14,6 +14,7 @@ import { Task, Column, Priority, TaskStatus } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { InlinePrioritySelect, InlineStatusSelect } from './InlineEditors';
 
 // Icon mapping for rendering column icons in list view
 const iconMap: Record<string, React.ReactNode> = {
@@ -39,7 +40,7 @@ interface ListViewProps {
   getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
 }
 
-type SortField = 'title' | 'priority' | 'dueDate' | 'createdAt' | 'status' | 'assignee' | 'market' | 'taskStatus';
+type SortField = 'title' | 'priority' | 'dueDate' | 'createdAt' | 'status' | 'assignee' | 'market' | 'taskStatus' | 'progress';
 type SortDirection = 'asc' | 'desc';
 
 const priorityOrder: Record<Priority, number> = {
@@ -74,7 +75,16 @@ const DEFAULT_WIDTHS = {
   dueDate: 110,
   assignee: 130,
   market: 80,
+  progress: 80,
   tags: 150,
+};
+
+// Calculate progress for a task
+const getTaskProgress = (task: Task) => {
+  const subtasks = task.subtasks || [];
+  if (subtasks.length === 0) return 0;
+  const completed = subtasks.filter(s => s.completed).length;
+  return Math.round((completed / subtasks.length) * 100);
 };
 
 export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlockedStatus }: ListViewProps) {
@@ -132,6 +142,9 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlo
       case 'taskStatus':
         comparison = (a.status || 'not_started').localeCompare(b.status || 'not_started');
         break;
+      case 'progress':
+        comparison = getTaskProgress(a) - getTaskProgress(b);
+        break;
     }
     
     return sortDirection === 'asc' ? comparison : -comparison;
@@ -188,7 +201,7 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlo
   }) => (
     <th
       className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider relative group"
-      style={{ width, minWidth: 80 }}
+      style={{ width, minWidth: 60 }}
     >
       <div 
         className="px-4 py-3 cursor-pointer hover:text-foreground transition-colors flex items-center gap-1"
@@ -218,8 +231,11 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlo
             <thead className="bg-muted/50">
               <tr>
                 <SortHeader field="title" width={columnWidths.title}>Tarea</SortHeader>
-                <SortHeader field="status" width={columnWidths.status}>Estado</SortHeader>
+                <SortHeader field="status" width={columnWidths.status}>Columna</SortHeader>
+                <SortHeader field="taskStatus" width={columnWidths.taskStatus}>Estado</SortHeader>
                 <SortHeader field="priority" width={columnWidths.priority}>Prioridad</SortHeader>
+                <SortHeader field="market" width={columnWidths.market}>Mercado</SortHeader>
+                <SortHeader field="progress" width={columnWidths.progress}>% Realiz.</SortHeader>
                 <SortHeader field="dueDate" width={columnWidths.dueDate}>Fecha límite</SortHeader>
                 <SortHeader field="assignee" width={columnWidths.assignee}>Asignado</SortHeader>
                 <th 
@@ -233,6 +249,7 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlo
             <tbody className="divide-y divide-border">
               {sortedTasks.map(task => {
                 const column = getColumnById(task.columnId);
+                const progress = getTaskProgress(task);
                 return (
                   <tr
                     key={task.id}
@@ -288,20 +305,44 @@ export function ListView({ tasks, columns, onTaskClick, onUpdateTask, getTaskBlo
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3" style={{ width: columnWidths.priority }}>
-                      <span
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: `${priorityConfig[task.priority].color}20`,
-                          color: priorityConfig[task.priority].color,
-                        }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: priorityConfig[task.priority].color }}
-                        />
-                        {priorityConfig[task.priority].label}
-                      </span>
+                    <td className="px-2 py-3" style={{ width: columnWidths.taskStatus }}>
+                      <InlineStatusSelect
+                        value={task.status}
+                        onChange={(status) => onUpdateTask(task.id, { status })}
+                      />
+                    </td>
+                    <td className="px-2 py-3" style={{ width: columnWidths.priority }}>
+                      <InlinePrioritySelect
+                        value={task.priority}
+                        onChange={(priority) => onUpdateTask(task.id, { priority })}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground" style={{ width: columnWidths.market }}>
+                      {task.relatedMarket ? (
+                        <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {task.relatedMarket}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3" style={{ width: columnWidths.progress }}>
+                      {progress > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={cn(
+                                "h-full rounded-full transition-all",
+                                progress === 100 ? "bg-green-500" : "bg-primary"
+                              )}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground">{progress}%</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground/50 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground" style={{ width: columnWidths.dueDate }}>
                       {task.dueDate ? (

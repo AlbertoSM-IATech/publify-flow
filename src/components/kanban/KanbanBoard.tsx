@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKanbanReducer } from '@/hooks/kanban';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskDetailPanel } from './TaskDetailPanel';
-import { FilterPanel } from './FilterPanel';
+import { CompactFilterPanel } from './CompactFilterPanel';
 import { ListView } from './ListView';
 import { CalendarView } from './CalendarView';
 import { TimelineView } from './TimelineView';
@@ -13,6 +13,7 @@ import { NotesView } from './NotesView';
 import { NewTaskDialog } from './NewTaskDialog';
 import { TagManager } from './TagManager';
 import { SaveIndicator } from './SaveIndicator';
+import { ArchivedTasksPanel } from './ArchivedTasksPanel';
 import { Task, ViewType } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ export function KanbanBoard() {
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
   const [newTaskColumnId, setNewTaskColumnId] = useState<string | undefined>(undefined);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showArchivedPanel, setShowArchivedPanel] = useState(false);
 
   // BUG FIX: Derive selectedTask from tasks array for real-time reactivity
   const selectedTask = useMemo(() => {
@@ -147,29 +149,21 @@ export function KanbanBoard() {
             <SaveIndicator status={kanban.saveStatus} />
           </div>
           <div className="flex items-center gap-2">
-            {/* Undo/Redo Buttons */}
-            <div className="flex items-center border border-border rounded-lg overflow-hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={kanban.undo}
-                disabled={!kanban.canUndo}
-                className="rounded-none border-r border-border h-9 w-9"
-                title="Deshacer (Ctrl+Z)"
-              >
-                <Undo2 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={kanban.redo}
-                disabled={!kanban.canRedo}
-                className="rounded-none h-9 w-9"
-                title="Rehacer (Ctrl+Y)"
-              >
-                <Redo2 className="w-4 h-4" />
-              </Button>
-            </div>
+            {/* Archived Tasks Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowArchivedPanel(true)}
+              className="border-border gap-2"
+            >
+              <Archive className="w-4 h-4" />
+              Archivadas
+              {kanban.getArchivedTasks().length > 0 && (
+                <span className="text-xs bg-muted-foreground/20 rounded-full px-1.5">
+                  {kanban.getArchivedTasks().length}
+                </span>
+              )}
+            </Button>
             {/* Hidden Columns Menu */}
             {hiddenColumns.length > 0 && (
               <DropdownMenu>
@@ -208,15 +202,6 @@ export function KanbanBoard() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setShowTagManager(true)}
-              className="border-border"
-              title="Gestionar etiquetas"
-            >
-              <Tag className="w-4 h-4" />
-            </Button>
             <Button 
               onClick={() => handleOpenNewTaskDialog()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-coral"
@@ -226,6 +211,8 @@ export function KanbanBoard() {
             </Button>
           </div>
         </div>
+
+        {/* Toolbar with Undo/Redo next to filters */}
 
         {/* Toolbar */}
         <div className="flex items-center gap-4">
@@ -276,14 +263,80 @@ export function KanbanBoard() {
               </span>
             )}
           </Button>
+
+          {/* Undo/Redo Buttons - Prominent */}
+          <div className="flex items-center border-2 border-primary/30 rounded-lg overflow-hidden bg-primary/5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={kanban.undo}
+              disabled={!kanban.canUndo}
+              className="rounded-none border-r border-primary/30 h-9 px-3 gap-1"
+              title="Deshacer (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs">Deshacer</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={kanban.redo}
+              disabled={!kanban.canRedo}
+              className="rounded-none h-9 px-3 gap-1"
+              title="Rehacer (Ctrl+Y)"
+            >
+              <Redo2 className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs">Rehacer</span>
+            </Button>
+          </div>
+
+          {/* Hidden Columns Menu */}
+          {hiddenColumns.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-border gap-2"
+                  title="Columnas ocultas"
+                >
+                  <EyeOff className="w-4 h-4" />
+                  <span className="text-xs bg-muted-foreground/20 rounded-full px-1.5">
+                    {hiddenColumns.length}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  Columnas ocultas
+                </div>
+                <DropdownMenuSeparator />
+                {hiddenColumns.map(col => (
+                  <DropdownMenuItem
+                    key={col.id}
+                    onClick={() => kanban.updateColumn(col.id, { isHidden: false })}
+                    className="flex items-center gap-2"
+                  >
+                    <div
+                      className="w-3 h-3 rounded-sm flex-shrink-0"
+                      style={{ backgroundColor: col.color }}
+                    />
+                    <span className="flex-1 truncate">{col.title}</span>
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
-        {/* Filter Panel */}
+        {/* Compact Filter Panel */}
         {showFilters && (
-          <FilterPanel
+          <CompactFilterPanel
             filter={kanban.filter}
             setFilter={kanban.setFilter}
             availableTags={kanban.availableTags}
+            uniqueAssignees={kanban.getUniqueAssignees()}
           />
         )}
       </header>
@@ -447,6 +500,36 @@ export function KanbanBoard() {
         onAddTag={kanban.addTag}
         onUpdateTag={kanban.updateTag}
         onDeleteTag={kanban.deleteTag}
+      />
+
+      {/* Archived Tasks Panel */}
+      <ArchivedTasksPanel
+        open={showArchivedPanel}
+        onOpenChange={setShowArchivedPanel}
+        archivedTasks={kanban.getArchivedTasks()}
+        columns={visibleColumns}
+        onRestoreTask={(taskId, targetColumnId) => {
+          const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
+          kanban.moveTask(taskId, targetColumnId, tasksInTarget);
+          kanban.updateTask(taskId, { isArchived: false });
+          toast.success('Tarea restaurada');
+        }}
+        onDeleteTask={(taskId) => {
+          kanban.deleteTask(taskId);
+          toast.success('Tarea eliminada');
+        }}
+        onBulkRestore={(taskIds, targetColumnId) => {
+          taskIds.forEach(taskId => {
+            const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
+            kanban.moveTask(taskId, targetColumnId, tasksInTarget);
+            kanban.updateTask(taskId, { isArchived: false });
+          });
+          toast.success(`${taskIds.length} tareas restauradas`);
+        }}
+        onBulkDelete={(taskIds) => {
+          taskIds.forEach(taskId => kanban.deleteTask(taskId));
+          toast.success(`${taskIds.length} tareas eliminadas`);
+        }}
       />
     </div>
   );

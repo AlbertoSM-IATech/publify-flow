@@ -1,29 +1,21 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, GripVertical, Calendar, Link } from 'lucide-react';
-import { Task, Priority, Column, TaskDependency } from '@/types/kanban';
+import { Task, Priority, Column, TaskStatus } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   format,
   addDays,
-  addMonths,
-  subMonths,
   differenceInDays,
   isSameDay,
-  addWeeks,
-  subWeeks,
   startOfDay,
-  getYear,
-  setMonth,
-  setYear,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -42,17 +34,25 @@ const priorityColors: Record<Priority, string> = {
   low: 'hsl(142 71% 45%)',
 };
 
-type ZoomLevel = 'day';
+const priorityLabels: Record<Priority, string> = {
+  critical: 'Crítica',
+  high: 'Alta',
+  medium: 'Media',
+  low: 'Baja',
+};
 
-const MONTHS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
+const statusLabels: Record<TaskStatus, string> = {
+  not_started: 'Sin empezar',
+  in_progress: 'En curso',
+  paused: 'Pausado',
+  waiting: 'En espera',
+  archived: 'Archivado',
+  completed: 'Terminado',
+};
 
 export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDependencyEdges }: TimelineViewProps) {
   const [startDateInput, setStartDateInput] = useState<Date>(addDays(new Date(), -7));
   const [endDateInput, setEndDateInput] = useState<Date>(addDays(new Date(), 30));
-  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>('day');
   const [draggedTask, setDraggedTask] = useState<{ id: string; type: 'move' | 'resize-start' | 'resize-end' } | null>(null);
   const [dragStartX, setDragStartX] = useState<number>(0);
   const [dragStartDate, setDragStartDate] = useState<Date | null>(null);
@@ -141,6 +141,16 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
     });
   }, [getDependencyEdges, showDependencies, taskRowIndex]);
 
+  // Get the book title for header
+  const getBookTitle = useMemo(() => {
+    // Find tasks with relatedBook and get unique books
+    const books = new Set<string>();
+    tasks.forEach(t => {
+      if (t.relatedBook) books.add(t.relatedBook);
+    });
+    return books.size === 1 ? Array.from(books)[0] : null;
+  }, [tasks]);
+
   const handlePrev = () => {
     setStartDateInput(addDays(startDateInput, -7));
     setEndDateInput(addDays(endDateInput, -7));
@@ -201,9 +211,13 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
   const isToday = (date: Date) => isSameDay(date, new Date());
   const isWeekend = (date: Date) => date.getDay() === 0 || date.getDay() === 6;
 
-  // Generate year options
-  const currentYear = getYear(new Date());
-  const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+  // Calculate progress percentage
+  const getTaskProgress = (task: Task) => {
+    const subtasks = task.subtasks || [];
+    if (subtasks.length === 0) return 0;
+    const completed = subtasks.filter(s => s.completed).length;
+    return Math.round((completed / subtasks.length) * 100);
+  };
 
   return (
     <div 
@@ -215,7 +229,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0 flex-wrap gap-4">
         <h2 className="text-xl font-heading font-semibold text-foreground">
-          Timeline
+          Tareas {getBookTitle && `· ${getBookTitle}`}
         </h2>
         
         <div className="flex items-center gap-4 flex-wrap">
@@ -336,6 +350,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                 const visibleStart = Math.max(0, task.startOffset);
                 const visibleEnd = Math.min(days.length, task.startOffset + task.duration);
                 const width = Math.max((visibleEnd - visibleStart) * dayWidth, dayWidth);
+                const progress = getTaskProgress(task);
                 
                 const isHighlighted = dependencyEdges.some(
                   edge => (edge.fromTaskId === task.id || edge.toTaskId === task.id) && 
@@ -351,7 +366,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                       isHighlighted && "bg-primary/5"
                     )}
                   >
-                    {/* Task name column - STICKY */}
+                    {/* Task name column - STICKY - Only title */}
                     <div 
                       ref={taskColumnRef}
                       className={cn(
@@ -381,69 +396,78 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                         ))}
                       </div>
                       
-                      {/* Task bar */}
-                      <div
-                        className={cn(
-                          "absolute top-1 bottom-1 rounded-md flex items-center px-2 cursor-pointer transition-all group",
-                          "hover:ring-2 hover:ring-primary/50",
-                          draggedTask?.id === task.id && "opacity-70 ring-2 ring-primary",
-                          isHighlighted && "ring-2 ring-primary"
-                        )}
-                        style={{
-                          left,
-                          width: Math.max(width, dayWidth),
-                          backgroundColor: `${priorityColors[task.priority]}20`,
-                          borderLeft: `3px solid ${priorityColors[task.priority]}`,
-                          borderLeftWidth: '3px',
-                          // Always-visible outline (was too subtle before)
-                          border: `1px solid ${priorityColors[task.priority]}E6`,
-                          boxShadow: `inset 0 0 0 1px ${priorityColors[task.priority]}80`,
-                        }}
-                        onClick={() => onTaskClick(task)}
-                      >
-                        {/* Drag handle for moving */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-                          onMouseDown={(e) => handleDragStart(e, task.id, 'move')}
-                        >
-                          <GripVertical className="w-3 h-3 text-muted-foreground" />
-                        </div>
-                        
-                        {/* Task title */}
-                        <span className="text-xs font-medium truncate text-foreground ml-4">
-                          {width > 100 ? task.title : ''}
-                        </span>
-
-                        {/* Tags */}
-                        {task.tags.length > 0 && width > 150 && (
-                          <div className="flex gap-1 ml-2">
-                            {task.tags.slice(0, 2).map(tag => (
-                              <span
-                                key={tag.id}
-                                className="text-[10px] px-1 rounded"
-                                style={{
-                                  backgroundColor: `${tag.color}30`,
-                                  color: tag.color,
-                                }}
+                      {/* Task bar - 30% orange background, show info on hover */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className={cn(
+                                "absolute top-1 bottom-1 rounded-md cursor-pointer transition-all group",
+                                "hover:ring-2 hover:ring-primary/50",
+                                draggedTask?.id === task.id && "opacity-70 ring-2 ring-primary",
+                                isHighlighted && "ring-2 ring-primary"
+                              )}
+                              style={{
+                                left,
+                                width: Math.max(width, dayWidth),
+                                backgroundColor: `${priorityColors[task.priority]}30`,
+                                border: `2px solid ${priorityColors[task.priority]}`,
+                              }}
+                              onClick={() => onTaskClick(task)}
+                            >
+                              {/* Drag handle for moving */}
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+                                onMouseDown={(e) => handleDragStart(e, task.id, 'move')}
                               >
-                                {tag.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                                <GripVertical className="w-3 h-3 text-muted-foreground" />
+                              </div>
 
-                        {/* Resize handle - left */}
-                        <div
-                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-l-md transition-opacity"
-                          onMouseDown={(e) => handleDragStart(e, task.id, 'resize-start')}
-                        />
+                              {/* Resize handle - left */}
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-l-md transition-opacity"
+                                onMouseDown={(e) => handleDragStart(e, task.id, 'resize-start')}
+                              />
 
-                        {/* Resize handle - right */}
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-r-md transition-opacity"
-                          onMouseDown={(e) => handleDragStart(e, task.id, 'resize-end')}
-                        />
-                      </div>
+                              {/* Resize handle - right */}
+                              <div
+                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100 bg-primary/30 rounded-r-md transition-opacity"
+                                onMouseDown={(e) => handleDragStart(e, task.id, 'resize-end')}
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <div className="space-y-1">
+                              <p className="font-medium">{task.title}</p>
+                              <div className="flex items-center gap-2 text-xs">
+                                <span 
+                                  className="px-1.5 py-0.5 rounded"
+                                  style={{
+                                    backgroundColor: `${priorityColors[task.priority]}20`,
+                                    color: priorityColors[task.priority],
+                                  }}
+                                >
+                                  {priorityLabels[task.priority]}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {statusLabels[task.status]}
+                                </span>
+                              </div>
+                              {progress > 0 && (
+                                <div className="flex items-center gap-2 text-xs">
+                                  <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-primary rounded-full"
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                  <span>{progress}%</span>
+                                </div>
+                              )}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 );
@@ -554,9 +578,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
           <div key={priority} className="flex items-center gap-1">
             <div className="w-3 h-3 rounded" style={{ backgroundColor: color }} />
             <span className="capitalize">
-              {priority === 'critical' ? 'Crítica' : 
-               priority === 'high' ? 'Alta' : 
-               priority === 'medium' ? 'Media' : 'Baja'}
+              {priorityLabels[priority as Priority]}
             </span>
           </div>
         ))}
