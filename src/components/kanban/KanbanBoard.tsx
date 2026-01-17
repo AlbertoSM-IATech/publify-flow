@@ -164,45 +164,7 @@ export function KanbanBoard() {
                 </span>
               )}
             </Button>
-            {/* Hidden Columns Menu */}
-            {hiddenColumns.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-border gap-2"
-                    title="Columnas ocultas"
-                  >
-                    <EyeOff className="w-4 h-4" />
-                    <span className="text-xs bg-muted-foreground/20 rounded-full px-1.5">
-                      {hiddenColumns.length}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                    Columnas ocultas
-                  </div>
-                  <DropdownMenuSeparator />
-                  {hiddenColumns.map(col => (
-                    <DropdownMenuItem
-                      key={col.id}
-                      onClick={() => kanban.updateColumn(col.id, { isHidden: false })}
-                      className="flex items-center gap-2"
-                    >
-                      <div
-                        className="w-3 h-3 rounded-sm flex-shrink-0"
-                        style={{ backgroundColor: col.color }}
-                      />
-                      <span className="flex-1 truncate">{col.title}</span>
-                      <Eye className="w-4 h-4 text-muted-foreground" />
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <Button 
+            <Button
               onClick={() => handleOpenNewTaskDialog()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-coral"
             >
@@ -290,44 +252,73 @@ export function KanbanBoard() {
             </Button>
           </div>
 
-          {/* Hidden Columns Menu */}
-          {hiddenColumns.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-border gap-2"
-                  title="Columnas ocultas"
-                >
-                  <EyeOff className="w-4 h-4" />
-                  <span className="text-xs bg-muted-foreground/20 rounded-full px-1.5">
-                    {hiddenColumns.length}
+          {/* Column Visibility Manager - Always visible */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "border-border gap-2",
+                  hiddenColumns.length > 0 && "border-amber-500/50 bg-amber-500/10"
+                )}
+                title="Gestionar columnas"
+              >
+                {hiddenColumns.length > 0 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <span className="hidden sm:inline text-xs">Columnas</span>
+                {hiddenColumns.length > 0 && (
+                  <span className="text-xs bg-amber-500/20 text-amber-600 rounded-full px-1.5">
+                    {hiddenColumns.length} ocultas
                   </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  Columnas ocultas
-                </div>
-                <DropdownMenuSeparator />
-                {hiddenColumns.map(col => (
-                  <DropdownMenuItem
-                    key={col.id}
-                    onClick={() => kanban.updateColumn(col.id, { isHidden: false })}
-                    className="flex items-center gap-2"
-                  >
-                    <div
-                      className="w-3 h-3 rounded-sm flex-shrink-0"
-                      style={{ backgroundColor: col.color }}
-                    />
-                    <span className="flex-1 truncate">{col.title}</span>
-                    <Eye className="w-4 h-4 text-muted-foreground" />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {/* Hidden columns section */}
+              {hiddenColumns.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <EyeOff className="w-3 h-3" />
+                    Columnas ocultas ({hiddenColumns.length})
+                  </div>
+                  {hiddenColumns.map(col => (
+                    <DropdownMenuItem
+                      key={col.id}
+                      onClick={() => kanban.updateColumn(col.id, { isHidden: false })}
+                      className="flex items-center gap-2"
+                    >
+                      <div
+                        className="w-3 h-3 rounded-sm flex-shrink-0"
+                        style={{ backgroundColor: col.color }}
+                      />
+                      <span className="flex-1 truncate">{col.title}</span>
+                      <Eye className="w-4 h-4 text-green-500" />
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {/* Visible columns section */}
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <Eye className="w-3 h-3" />
+                Columnas visibles ({visibleColumns.length})
+              </div>
+              {visibleColumns.map(col => (
+                <DropdownMenuItem
+                  key={col.id}
+                  onClick={() => kanban.updateColumn(col.id, { isHidden: true })}
+                  className="flex items-center gap-2"
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm flex-shrink-0"
+                    style={{ backgroundColor: col.color }}
+                  />
+                  <span className="flex-1 truncate">{col.title}</span>
+                  <EyeOff className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Compact Filter Panel */}

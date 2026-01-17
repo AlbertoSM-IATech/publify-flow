@@ -27,11 +27,19 @@ interface TimelineViewProps {
   getDependencyEdges?: () => { fromTaskId: string; toTaskId: string; fromTask: Task; toTask: Task }[];
 }
 
+// HSL values for priority colors (without hsl() wrapper for alpha manipulation)
+const priorityColorsHSL: Record<Priority, string> = {
+  critical: '0 84% 60%',
+  high: '24 94% 59%',
+  medium: '38 92% 50%',
+  low: '142 71% 45%',
+};
+
 const priorityColors: Record<Priority, string> = {
-  critical: 'hsl(0 84% 60%)',
-  high: 'hsl(24 94% 59%)',
-  medium: 'hsl(38 92% 50%)',
-  low: 'hsl(142 71% 45%)',
+  critical: `hsl(${priorityColorsHSL.critical})`,
+  high: `hsl(${priorityColorsHSL.high})`,
+  medium: `hsl(${priorityColorsHSL.medium})`,
+  low: `hsl(${priorityColorsHSL.low})`,
 };
 
 const priorityLabels: Record<Priority, string> = {
@@ -410,7 +418,7 @@ export function TimelineView({ tasks, columns, onTaskClick, onUpdateTask, getDep
                               style={{
                                 left,
                                 width: Math.max(width, dayWidth),
-                                backgroundColor: `${priorityColors[task.priority]}30`,
+                                backgroundColor: `hsl(${priorityColorsHSL[task.priority]} / 0.3)`,
                                 border: `2px solid ${priorityColors[task.priority]}`,
                               }}
                               onClick={() => onTaskClick(task)}
