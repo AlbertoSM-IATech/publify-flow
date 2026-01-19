@@ -1,7 +1,6 @@
-import { X, Globe, Archive, User, Calendar, Tag as TagIcon, AlertCircle } from 'lucide-react';
+import { X, Globe, User, Calendar, Tag as TagIcon, AlertCircle } from 'lucide-react';
 import { Filter, Priority, Tag, TaskStatus } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -88,10 +87,6 @@ export function CompactFilterPanel({ filter, setFilter, availableTags, uniqueAss
     setFilter({ ...filter, assignee: assignee === 'all' ? null : assignee });
   };
 
-  const toggleShowArchived = () => {
-    setFilter({ ...filter, showArchived: !filter.showArchived });
-  };
-
   const clearFilters = () => {
     setFilter({
       priority: [],
@@ -104,7 +99,7 @@ export function CompactFilterPanel({ filter, setFilter, availableTags, uniqueAss
     });
   };
 
-  const hasFilters = filter.priority.length > 0 || filter.tags.length > 0 || filter.assignee || filter.market || filter.showArchived || filter.dueDate.from || filter.dueDate.to;
+  const hasFilters = filter.priority.length > 0 || filter.tags.length > 0 || filter.assignee || filter.market || filter.dueDate.from || filter.dueDate.to;
   const activeFilterCount = filter.priority.length + filter.tags.length + (filter.assignee ? 1 : 0) + (filter.market ? 1 : 0) + (filter.dueDate.from || filter.dueDate.to ? 1 : 0);
 
   return (
@@ -328,22 +323,6 @@ export function CompactFilterPanel({ filter, setFilter, availableTags, uniqueAss
             </div>
           </PopoverContent>
         </Popover>
-
-        {/* Show Archived Toggle */}
-        <div className={cn(
-          "flex items-center justify-between px-3 rounded-md border h-9",
-          filter.showArchived ? "border-primary bg-primary/5" : "border-border"
-        )}>
-          <span className="flex items-center gap-2 text-sm">
-            <Archive className="w-4 h-4" />
-            <span className="hidden lg:inline">Archivadas</span>
-          </span>
-          <Switch
-            checked={filter.showArchived}
-            onCheckedChange={toggleShowArchived}
-            className="scale-75"
-          />
-        </div>
       </div>
     </div>
   );
