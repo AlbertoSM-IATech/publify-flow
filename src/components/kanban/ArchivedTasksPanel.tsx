@@ -108,7 +108,7 @@ export function ArchivedTasksPanel({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-3xl bg-card border-border max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-6xl w-[95vw] bg-card border-border max-h-[90vh] h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Archive className="w-5 h-5" />

@@ -126,13 +126,18 @@ export function KanbanBoard() {
   ];
 
   // Get visible and hidden columns, sorted by order
-  const visibleColumns = useMemo(() => 
-    kanban.columns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
+  // EXCLUDE 'archived' column from Kanban - managed via ArchivedTasksPanel
+  const kanbanColumns = useMemo(() => 
+    kanban.columns.filter(c => c.id !== 'archived'),
     [kanban.columns]
   );
+  const visibleColumns = useMemo(() => 
+    kanbanColumns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
+    [kanbanColumns]
+  );
   const hiddenColumns = useMemo(() => 
-    kanban.columns.filter(c => c.isHidden).sort((a, b) => a.order - b.order),
-    [kanban.columns]
+    kanbanColumns.filter(c => c.isHidden).sort((a, b) => a.order - b.order),
+    [kanbanColumns]
   );
 
   return (
