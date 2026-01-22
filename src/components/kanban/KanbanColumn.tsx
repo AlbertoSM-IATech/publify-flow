@@ -59,6 +59,8 @@ interface KanbanColumnProps {
   // Restore functionality (for Archivado)
   restoreTargetColumns?: Column[];
   onRestoreTask?: (taskId: string, targetColumnId: string) => void;
+  // Inline editing
+  onUpdateTask?: (taskId: string, updates: Partial<Task>) => void;
 }
 
 export function KanbanColumn({
@@ -83,6 +85,7 @@ export function KanbanColumn({
   onArchiveTask,
   restoreTargetColumns,
   onRestoreTask,
+  onUpdateTask,
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -349,6 +352,8 @@ export function KanbanColumn({
                 showRestoreButton={column.id === 'archived' && !!onRestoreTask && !!restoreTargetColumns && restoreTargetColumns.length > 0}
                 restoreTargetColumns={restoreTargetColumns}
                 onRestoreToColumn={onRestoreTask ? (targetColumnId) => onRestoreTask(task.id, targetColumnId) : undefined}
+                onUpdateStatus={onUpdateTask ? (status) => onUpdateTask(task.id, { status }) : undefined}
+                onUpdatePriority={onUpdateTask ? (priority) => onUpdateTask(task.id, { priority }) : undefined}
               />
             </div>
           );

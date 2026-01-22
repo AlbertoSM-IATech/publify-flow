@@ -29,7 +29,7 @@ interface NotesViewProps {
   onUpdateNote: (noteId: string, updates: Partial<Note>) => void;
   onDeleteNote: (noteId: string) => void;
   columns?: Column[];
-  onConvertToTask?: (note: Note) => void;
+  onConvertToTask?: (note: Note, columnId: string) => void;
 }
 
 type SortField = 'title' | 'priority' | 'createdAt' | 'updatedAt';
@@ -56,6 +56,8 @@ export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote, column
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [convertTargetColumnId, setConvertTargetColumnId] = useState<string>('');
   
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -312,8 +314,59 @@ export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote, column
         </DialogContent>
       </Dialog>
 
+      {/* Convert to Task Dialog */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5" />
+              Convertir nota a tarea
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Selecciona la columna destino
+              </label>
+              <Select value={convertTargetColumnId} onValueChange={setConvertTargetColumnId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar columna..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns?.filter(col => col.id !== 'archived').map(col => (
+                    <SelectItem key={col.id} value={col.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: col.color }} />
+                        {col.title}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedNote && convertTargetColumnId && onConvertToTask) {
+                    onConvertToTask(selectedNote, convertTargetColumnId);
+                    setShowConvertDialog(false);
+                    setSelectedNote(null);
+                  }
+                }}
+                disabled={!convertTargetColumnId}
+              >
+                Crear tarea
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Note Detail Dialog */}
-      <Dialog open={!!selectedNote} onOpenChange={(open) => !open && setSelectedNote(null)}>
+      <Dialog open={!!selectedNote && !showConvertDialog} onOpenChange={(open) => !open && setSelectedNote(null)}>
         <DialogContent className="sm:max-w-3xl bg-card border-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -324,16 +377,14 @@ export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote, column
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
-                    {selectedNote && onConvertToTask && (
+                    {selectedNote && onConvertToTask && columns && columns.length > 0 && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          onConvertToTask(selectedNote);
-                          // Keep the note; just close the dialog for smoother workflow
-                          setSelectedNote(null);
+                          setConvertTargetColumnId(columns.filter(c => c.id !== 'archived')[0]?.id || '');
+                          setShowConvertDialog(true);
                         }}
-                        title={columns?.[0] ? `Se creará en: ${columns[0].title}` : 'Convertir nota en tarea'}
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Convertir a tarea
