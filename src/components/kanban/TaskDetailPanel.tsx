@@ -113,6 +113,40 @@ interface TaskDetailPanelProps {
 const MIN_PANEL_WIDTH = 400;
 const MAX_PANEL_WIDTH = 900;
 const DEFAULT_PANEL_WIDTH = 640;
+const PANEL_WIDTH_STORAGE_KEY = 'kanban-detail-panel-width';
+const PANEL_WIDE_STORAGE_KEY = 'kanban-detail-panel-wide';
+
+function loadPanelWidth(): number {
+  try {
+    const stored = localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
+    if (stored) {
+      const width = parseInt(stored, 10);
+      if (width >= MIN_PANEL_WIDTH && width <= MAX_PANEL_WIDTH) {
+        return width;
+      }
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_PANEL_WIDTH;
+}
+
+function savePanelWidth(width: number): void {
+  try {
+    localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(width));
+  } catch { /* ignore */ }
+}
+
+function loadPanelWide(): boolean {
+  try {
+    return localStorage.getItem(PANEL_WIDE_STORAGE_KEY) === 'true';
+  } catch { /* ignore */ }
+  return false;
+}
+
+function savePanelWide(wide: boolean): void {
+  try {
+    localStorage.setItem(PANEL_WIDE_STORAGE_KEY, String(wide));
+  } catch { /* ignore */ }
+}
 
 // ============= Dependencies Section Component =============
 interface DependenciesSectionProps {
@@ -345,10 +379,22 @@ export function TaskDetailPanel({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [newChecklistItem, setNewChecklistItem] = useState('');
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
   const [isResizing, setIsResizing] = useState(false);
-  const [isWide, setIsWide] = useState(false);
+  const [isWide, setIsWide] = useState(loadPanelWide);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+  // Persist panel width changes
+  useEffect(() => {
+    if (!isResizing) {
+      savePanelWidth(panelWidth);
+    }
+  }, [panelWidth, isResizing]);
+
+  // Persist wide mode changes
+  useEffect(() => {
+    savePanelWide(isWide);
+  }, [isWide]);
   
   const panelRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);

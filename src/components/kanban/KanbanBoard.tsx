@@ -382,6 +382,7 @@ export function KanbanBoard() {
                     });
                     toast.success('Tarea restaurada');
                   }}
+                  onUpdateTask={kanban.updateTask}
                 />
               ))}
               
@@ -438,10 +439,8 @@ export function KanbanBoard() {
             onUpdateNote={kanban.updateNote}
             onDeleteNote={kanban.deleteNote}
             columns={visibleColumns}
-            onConvertToTask={(note) => {
-              const firstColumn = visibleColumns[0];
-              if (!firstColumn) return;
-              kanban.addTask(firstColumn.id, {
+            onConvertToTask={(note, columnId) => {
+              kanban.addTask(columnId, {
                 title: note.title,
                 description: note.content || note.shortDescription || '',
                 priority: note.priority,

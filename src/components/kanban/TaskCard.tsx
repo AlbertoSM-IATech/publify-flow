@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Circle, Lock, Archive, CornerUpLeft } from 'lucide-react';
+import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Lock, Archive, CornerUpLeft } from 'lucide-react';
 import { Task, Priority, TaskStatus, Column } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InlinePrioritySelect, InlineStatusSelect } from './InlineEditors';
 
 interface TaskCardProps {
   task: Task;
@@ -33,6 +34,9 @@ interface TaskCardProps {
   showRestoreButton?: boolean;
   restoreTargetColumns?: Column[];
   onRestoreToColumn?: (targetColumnId: string) => void;
+  // Inline editing
+  onUpdateStatus?: (status: TaskStatus) => void;
+  onUpdatePriority?: (priority: Priority) => void;
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
@@ -51,7 +55,7 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   completed: { label: 'Terminado', color: '#22C55E' },
 };
 
-export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false, showRestoreButton = false, restoreTargetColumns = [], onRestoreToColumn }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false, showRestoreButton = false, restoreTargetColumns = [], onRestoreToColumn, onUpdateStatus, onUpdatePriority }: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // Use subtasks for progress calculation
   const subtasks = task.subtasks || [];
@@ -121,20 +125,27 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
           </Tooltip>
         </TooltipProvider>
       )}
-      {/* Header with drag handle and tags */}
+      {/* Header with drag handle and status */}
       <div className="flex items-center gap-2 mb-2 -mt-1">
         <GripVertical className="w-4 h-4 text-muted-foreground/50 cursor-grab flex-shrink-0" />
-        {/* Status badge */}
-        <span 
-          className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0"
-          style={{ 
-            backgroundColor: `${status.color}20`,
-            color: status.color 
-          }}
-        >
-          <Circle className="w-2 h-2" style={{ fill: status.color }} />
-          {status.label}
-        </span>
+        {/* Inline Status Select */}
+        {onUpdateStatus ? (
+          <InlineStatusSelect
+            value={task.status}
+            onChange={onUpdateStatus}
+            compact
+          />
+        ) : (
+          <span 
+            className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0"
+            style={{ 
+              backgroundColor: `${status.color}20`,
+              color: status.color 
+            }}
+          >
+            {status.label}
+          </span>
+        )}
         {/* Tags */}
         {task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 flex-1 min-w-0">
@@ -192,13 +203,21 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border/50">
         <div className="flex items-center gap-2">
-          {/* Priority */}
-          <span className={cn(
-            "status-badge border",
-            priorityConfig[task.priority].className
-          )}>
-            {priorityConfig[task.priority].label}
-          </span>
+          {/* Inline Priority Select */}
+          {onUpdatePriority ? (
+            <InlinePrioritySelect
+              value={task.priority}
+              onChange={onUpdatePriority}
+              compact
+            />
+          ) : (
+            <span className={cn(
+              "status-badge border",
+              priorityConfig[task.priority].className
+            )}>
+              {priorityConfig[task.priority].label}
+            </span>
+          )}
 
           {/* Market */}
           {task.relatedMarket && (
