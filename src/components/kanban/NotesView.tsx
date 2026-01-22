@@ -3,7 +3,7 @@ import {
   Plus, Search, FileText, Calendar, Trash2, Pencil, X, Check,
   ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
-import { Note, Priority } from '@/types/kanban';
+import { Column, Note, Priority } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -28,6 +28,8 @@ interface NotesViewProps {
   onAddNote: (note: Partial<Note>) => void;
   onUpdateNote: (noteId: string, updates: Partial<Note>) => void;
   onDeleteNote: (noteId: string) => void;
+  columns?: Column[];
+  onConvertToTask?: (note: Note) => void;
 }
 
 type SortField = 'title' | 'priority' | 'createdAt' | 'updatedAt';
@@ -47,7 +49,7 @@ const priorityConfig: Record<Priority, { label: string; color: string }> = {
   low: { label: 'Baja', color: '#22C55E' },
 };
 
-export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote }: NotesViewProps) {
+export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote, columns, onConvertToTask }: NotesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -322,6 +324,21 @@ export function NotesView({ notes, onAddNote, onUpdateNote, onDeleteNote }: Note
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
+                    {selectedNote && onConvertToTask && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          onConvertToTask(selectedNote);
+                          // Keep the note; just close the dialog for smoother workflow
+                          setSelectedNote(null);
+                        }}
+                        title={columns?.[0] ? `Se creará en: ${columns[0].title}` : 'Convertir nota en tarea'}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Convertir a tarea
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
                       <Pencil className="w-4 h-4 mr-1" />
                       Editar
