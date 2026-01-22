@@ -112,6 +112,10 @@ export function CalendarView({
   // Calculate number of weeks for square cells
   const numWeeks = Math.ceil(days.length / 7);
 
+  const weeks = useMemo(() => {
+    return Array.from({ length: numWeeks }, (_, w) => days.slice(w * 7, w * 7 + 7));
+  }, [days, numWeeks]);
+
   // Filter out archived tasks and get tasks with date ranges for multi-day spanning
   const tasksWithDates = useMemo(() => {
     return tasks
@@ -128,6 +132,70 @@ export function CalendarView({
         };
       });
   }, [tasks]);
+
+  const singleDayTasks = useMemo(() => {
+    return tasksWithDates.filter(t => t.spanDays === 1);
+  }, [tasksWithDates]);
+
+  type TaskWithDates = (typeof tasksWithDates)[number];
+  type Segment = {
+    id: string;
+    task: TaskWithDates;
+    startCol: number;
+    span: number;
+    lane: number;
+    weekIndex: number;
+    segmentStart: Date;
+    segmentEnd: Date;
+  };
+
+  const multiDaySegmentsByWeek = useMemo(() => {
+    const byWeek = new Map<number, Segment[]>();
+
+    const multi = tasksWithDates.filter(t => t.spanDays > 1);
+    weeks.forEach((weekDays, weekIndex) => {
+      const weekStart = weekDays[0];
+      const weekEnd = weekDays[6];
+
+      const segments: Omit<Segment, 'lane'>[] = [];
+      for (const t of multi) {
+        // intersection check
+        if (isAfter(t.taskStart, weekEnd) || isBefore(t.taskEnd, weekStart)) continue;
+        const segmentStart = isBefore(t.taskStart, weekStart) ? weekStart : t.taskStart;
+        const segmentEnd = isAfter(t.taskEnd, weekEnd) ? weekEnd : t.taskEnd;
+
+        const startCol = Math.max(0, Math.min(6, differenceInDays(segmentStart, weekStart)));
+        const span = Math.max(1, Math.min(7 - startCol, differenceInDays(segmentEnd, segmentStart) + 1));
+        segments.push({
+          id: `${t.id}:${weekIndex}:${startCol}:${span}`,
+          task: t,
+          startCol,
+          span,
+          weekIndex,
+          segmentStart,
+          segmentEnd,
+        });
+      }
+
+      // lane packing (greedy)
+      segments.sort((a, b) => a.startCol - b.startCol || a.span - b.span);
+      const laneEnd: number[] = [];
+      const withLanes: Segment[] = segments.map(seg => {
+        let lane = 0;
+        while (lane < laneEnd.length) {
+          if (seg.startCol > laneEnd[lane]) break;
+          lane++;
+        }
+        if (lane === laneEnd.length) laneEnd.push(-1);
+        laneEnd[lane] = seg.startCol + seg.span - 1;
+        return { ...seg, lane };
+      });
+
+      byWeek.set(weekIndex, withLanes);
+    });
+
+    return byWeek;
+  }, [tasksWithDates, weeks]);
 
   // Get tasks that are active on a specific date (start, span, or end)
   const getTasksForDate = (date: Date) => {
@@ -224,9 +292,6 @@ export function CalendarView({
 
   const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-  // Track which tasks have already been rendered (to avoid duplicates for multi-day)
-  const renderedTasksPerRow: Map<number, Set<string>> = new Map();
-
   return (
     <div className="h-full flex flex-col p-6 overflow-hidden">
       {/* Header with Month/Year Selectors */}
@@ -322,83 +387,52 @@ export function CalendarView({
           ))}
         </div>
 
-        {/* Days Grid - Square cells */}
-        <div 
-          className="grid grid-cols-7 flex-1 overflow-y-auto"
-          style={{ 
-            gridTemplateRows: `repeat(${numWeeks}, minmax(0, 1fr))`,
-          }}
-        >
-          {days.map((date, index) => {
-            const dayTasks = getTasksForDate(date);
-            const isCurrentMonth = isSameMonth(date, currentMonth);
-            const isCurrentDay = isToday(date);
-            const weekRow = Math.floor(index / 7);
+        {/* Days Grid */}
+        <div className="flex-1 overflow-y-auto">
+          <div
+            className="grid grid-cols-7"
+            style={{ gridTemplateRows: `repeat(${numWeeks}, minmax(0, 1fr))` }}
+          >
+            {days.map((date, index) => {
+              const isCurrentMonth = isSameMonth(date, currentMonth);
+              const isCurrentDay = isToday(date);
+              const daySingleTasks = singleDayTasks.filter(t => isSameDay(t.taskEnd, date));
 
-            // Initialize tracking for this row if not exists
-            if (!renderedTasksPerRow.has(weekRow)) {
-              renderedTasksPerRow.set(weekRow, new Set());
-            }
-            const renderedInRow = renderedTasksPerRow.get(weekRow)!;
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "border-b border-r border-border p-1 transition-colors relative group flex flex-col min-h-0",
+                    !isCurrentMonth && "bg-muted/30",
+                    "hover:bg-muted/50"
+                  )}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, date)}
+                >
+                  {/* Date header */}
+                  <div className="flex items-center justify-between mb-0.5 flex-shrink-0">
+                    <span
+                      className={cn(
+                        "text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full",
+                        !isCurrentMonth && "text-muted-foreground",
+                        isCurrentDay && "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      {format(date, 'd')}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                      onClick={() => handleDateClick(date)}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
 
-            return (
-              <div
-                key={index}
-                className={cn(
-                  "border-b border-r border-border p-1 transition-colors relative group flex flex-col aspect-square",
-                  !isCurrentMonth && "bg-muted/30",
-                  "hover:bg-muted/50"
-                )}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, date)}
-              >
-                {/* Date header */}
-                <div className="flex items-center justify-between mb-0.5 flex-shrink-0">
-                  <span
-                    className={cn(
-                      "text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full",
-                      !isCurrentMonth && "text-muted-foreground",
-                      isCurrentDay && "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    {format(date, 'd')}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                    onClick={() => handleDateClick(date)}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </Button>
-                </div>
-                
-                {/* Task list */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin space-y-0.5 relative">
-                  {dayTasks.map(task => {
-                    // Check if this is a multi-day task that should start rendering here
-                    const shouldRenderHere = isTaskStart(task, date) || 
-                      (index % 7 === 0 && isWithinInterval(date, { start: task.taskStart, end: task.taskEnd }));
-                    
-                    // Skip if already rendered in this row
-                    if (renderedInRow.has(task.id) && !shouldRenderHere) {
-                      return null;
-                    }
-
-                    // For multi-day tasks, only render at start or beginning of week
-                    if (task.spanDays > 1) {
-                      if (!shouldRenderHere) {
-                        return null;
-                      }
-                      renderedInRow.add(task.id);
-                    }
-
-                    const span = task.spanDays > 1 ? getSpanForDate(task, date, index) : 1;
-                    const isMultiDay = task.spanDays > 1;
-                    const isStart = isTaskStart(task, date);
-                    const isEnd = isTaskEnd(task, addDays(date, span - 1));
-
-                    return (
+                  {/* Single-day tasks only (multi-day rendered as week overlays) */}
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin space-y-0.5">
+                    {daySingleTasks.map(task => (
                       <TooltipProvider key={task.id}>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -408,25 +442,13 @@ export function CalendarView({
                               onDragEnd={handleDragEnd}
                               onClick={() => onTaskClick(task)}
                               className={cn(
-                                "text-left text-xs transition-all cursor-grab active:cursor-grabbing",
+                                "w-full px-1 py-0.5 rounded text-left text-xs transition-all cursor-grab active:cursor-grabbing",
                                 "hover:ring-1 hover:ring-primary/50",
-                                draggedTaskId === task.id && "opacity-50 scale-95",
-                                isMultiDay ? "absolute z-10" : "w-full px-1 py-0.5 rounded"
+                                draggedTaskId === task.id && "opacity-50 scale-95"
                               )}
                               style={{
                                 backgroundColor: `hsl(${priorityColorsHSL[task.priority]} / 0.3)`,
                                 border: `1px solid ${priorityColors[task.priority]}`,
-                                ...(isMultiDay ? {
-                                  left: 0,
-                                  right: `calc(-${(span - 1) * 100}% - ${(span - 1) * 4}px)`,
-                                  borderRadius: isStart && isEnd ? '4px' : 
-                                               isStart ? '4px 0 0 4px' : 
-                                               isEnd ? '0 4px 4px 0' : '0',
-                                  padding: '2px 4px',
-                                  minHeight: '18px',
-                                } : {
-                                  borderRadius: '4px',
-                                }),
                               }}
                             >
                               <span className="font-medium truncate block text-foreground text-[10px]">
@@ -438,7 +460,7 @@ export function CalendarView({
                             <div className="space-y-1">
                               <p className="font-medium">{task.title}</p>
                               <div className="flex items-center gap-2 text-xs">
-                                <span 
+                                <span
                                   className="px-1.5 py-0.5 rounded"
                                   style={{
                                     backgroundColor: `hsl(${priorityColorsHSL[task.priority]} / 0.3)`,
@@ -454,21 +476,76 @@ export function CalendarView({
                                   </span>
                                 )}
                               </div>
-                              {task.spanDays > 1 && (
-                                <p className="text-xs text-muted-foreground">
-                                  {format(task.taskStart, 'd MMM', { locale: es })} - {format(task.taskEnd, 'd MMM', { locale: es })}
-                                </p>
-                              )}
                             </div>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Week overlays for multi-day tasks */}
+          <div className="-mt-[calc(100%)] pointer-events-none">
+            <div
+              className="grid grid-cols-7"
+              style={{ gridTemplateRows: `repeat(${numWeeks}, minmax(0, 1fr))` }}
+            >
+              {weeks.map((weekDays, weekIndex) => {
+                const segments = multiDaySegmentsByWeek.get(weekIndex) || [];
+                const laneCount = segments.reduce((m, s) => Math.max(m, s.lane + 1), 0);
+
+                return (
+                  <div
+                    key={weekIndex}
+                    className="col-span-7 relative border-b border-border"
+                    style={{
+                      // reserve a small top band for bars; does not affect day cell sizing
+                      minHeight: 0,
+                    }}
+                  >
+                    <div
+                      className="absolute inset-0 grid"
+                      style={{
+                        gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                        gridAutoRows: '18px',
+                        padding: '24px 4px 4px 4px',
+                        gap: '2px 4px',
+                      }}
+                    >
+                      {segments.map(seg => {
+                        const isStartInWeek = isSameDay(seg.segmentStart, seg.task.taskStart);
+                        const isEndInWeek = isSameDay(seg.segmentEnd, seg.task.taskEnd);
+                        return (
+                          <button
+                            key={seg.id}
+                            type="button"
+                            className={cn(
+                              'pointer-events-auto text-left text-[10px] font-medium truncate px-1.5 py-0.5 rounded transition-all',
+                              'hover:ring-1 hover:ring-primary/50'
+                            )}
+                            onClick={() => onTaskClick(seg.task)}
+                            style={{
+                              gridColumn: `${seg.startCol + 1} / span ${seg.span}`,
+                              gridRow: `${seg.lane + 1}`,
+                              backgroundColor: `hsl(${priorityColorsHSL[seg.task.priority]} / 0.3)`,
+                              border: `1px solid ${priorityColors[seg.task.priority]}`,
+                              borderRadius: isStartInWeek && isEndInWeek ? '4px' : isStartInWeek ? '4px 0 0 4px' : isEndInWeek ? '0 4px 4px 0' : '0',
+                            }}
+                            title={seg.task.title}
+                          >
+                            {seg.task.title}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 

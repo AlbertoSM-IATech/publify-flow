@@ -4,7 +4,7 @@ import {
   CheckSquare, Plus, AlertCircle, FileText, Archive, Circle,
   Search, Layout, Edit3, Palette, CheckCircle, Upload,
   TrendingUp, Megaphone, Settings, Check, Folder, Globe, GripVertical,
-  Link, Lock, AlertTriangle
+  Link, Lock, AlertTriangle, Maximize2, Minimize2, ChevronsUpDown
 } from 'lucide-react';
 import { Task, Column, Tag as TagType, Priority, TaskStatus } from '@/types/kanban';
 import { Button } from '@/components/ui/button';
@@ -347,6 +347,8 @@ export function TaskDetailPanel({
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
+  const [isWide, setIsWide] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   
   const panelRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -356,12 +358,7 @@ export function TaskDetailPanel({
     setDescription(task.description);
   }, [task.id, task.title, task.description]);
 
-  useEffect(() => {
-    if (descriptionRef.current) {
-      descriptionRef.current.style.height = 'auto';
-      descriptionRef.current.style.height = `${Math.min(descriptionRef.current.scrollHeight, 200)}px`;
-    }
-  }, [description]);
+  // NOTE: description textarea is user-resizable; no JS autosizing.
 
   // Resize handlers
   useEffect(() => {
@@ -512,6 +509,23 @@ export function TaskDetailPanel({
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const next = !isWide;
+                setIsWide(next);
+                if (next) {
+                  setPanelWidth(Math.min(window.innerWidth - 24, MAX_PANEL_WIDTH));
+                } else {
+                  setPanelWidth(DEFAULT_PANEL_WIDTH);
+                }
+              }}
+              title={isWide ? 'Volver a tamaño normal' : 'Expandir panel'}
+            >
+              {isWide ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -762,18 +776,33 @@ export function TaskDetailPanel({
 
             {/* Description */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Descripción
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Descripción
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setIsDescriptionExpanded(v => !v)}
+                  title={isDescriptionExpanded ? 'Contraer' : 'Expandir'}
+                >
+                  <ChevronsUpDown className="w-4 h-4 mr-1" />
+                  {isDescriptionExpanded ? 'Contraer' : 'Expandir'}
+                </Button>
+              </div>
               <textarea
                 ref={descriptionRef}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 onBlur={handleDescriptionBlur}
                 placeholder="Añade una descripción..."
-                className="w-full min-h-[80px] max-h-[200px] px-3 py-2 text-sm bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                style={{ overflow: 'hidden' }}
+                className={cn(
+                  "w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y",
+                  isDescriptionExpanded ? "min-h-[260px] max-h-[520px]" : "min-h-[100px] max-h-[240px]"
+                )}
               />
             </div>
 

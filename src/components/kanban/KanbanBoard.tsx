@@ -126,10 +126,11 @@ export function KanbanBoard() {
   ];
 
   // Get visible and hidden columns, sorted by order
+  // IMPORTANT: use allColumns so we can list & restore hidden columns.
   // EXCLUDE 'archived' column from Kanban - managed via ArchivedTasksPanel
   const kanbanColumns = useMemo(() => 
-    kanban.columns.filter(c => c.id !== 'archived'),
-    [kanban.columns]
+    kanban.allColumns.filter(c => c.id !== 'archived'),
+    [kanban.allColumns]
   );
   const visibleColumns = useMemo(() => 
     kanbanColumns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
@@ -367,12 +368,8 @@ export function KanbanBoard() {
                   }}
                   shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
                   onArchiveTask={(taskId) => {
-                    const archivedColumn = kanban.columns.find(c => c.id === 'archived');
-                    if (archivedColumn) {
-                      const tasksInArchived = kanban.getTasksByColumn('archived').length;
-                      kanban.moveTask(taskId, 'archived', tasksInArchived);
-                      toast.success('Tarea archivada');
-                    }
+                    kanban.archiveTask(taskId);
+                    toast.success('Tarea archivada');
                   }}
                   restoreTargetColumns={visibleColumns.filter(c => c.id !== 'archived')}
                   onRestoreTask={(taskId, targetColumnId) => {
@@ -440,6 +437,18 @@ export function KanbanBoard() {
             onAddNote={kanban.addNote}
             onUpdateNote={kanban.updateNote}
             onDeleteNote={kanban.deleteNote}
+            columns={visibleColumns}
+            onConvertToTask={(note) => {
+              const firstColumn = visibleColumns[0];
+              if (!firstColumn) return;
+              kanban.addTask(firstColumn.id, {
+                title: note.title,
+                description: note.content || note.shortDescription || '',
+                priority: note.priority,
+                status: 'not_started',
+              });
+              toast.success('Nota convertida en tarea');
+            }}
           />
         )}
       </main>
