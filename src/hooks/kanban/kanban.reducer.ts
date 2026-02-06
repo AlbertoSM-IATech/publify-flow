@@ -444,10 +444,11 @@ export function kanbanReducer(history: HistoryState, action: KanbanAction): Hist
 
     // ========== COLUMN ACTIONS ==========
     case 'COLUMN_CREATED': {
-      const title = action.payload as string;
+      const { title, subtitle } = action.payload as { title: string; subtitle?: string };
       const newColumn: Column = {
         id: generateId(),
         title,
+        subtitle: subtitle || '',
         color: '#6B7280',
         icon: 'folder',
         wipLimit: null,

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye, Archive } from 'lucide-react';
+import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye, Archive, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { useKanbanReducer } from '@/hooks/kanban';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskDetailPanel } from './TaskDetailPanel';
@@ -18,6 +19,12 @@ import { Task, ViewType } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,8 +32,12 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-export function KanbanBoard() {
-  const kanban = useKanbanReducer();
+interface KanbanBoardProps {
+  bookId: string;
+}
+
+export function KanbanBoard({ bookId }: KanbanBoardProps) {
+  const kanban = useKanbanReducer(bookId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('kanban');
@@ -126,12 +137,7 @@ export function KanbanBoard() {
   ];
 
   // Get visible and hidden columns, sorted by order
-  // IMPORTANT: use allColumns so we can list & restore hidden columns.
-  // EXCLUDE 'archived' column from Kanban - managed via ArchivedTasksPanel
-  const kanbanColumns = useMemo(() => 
-    kanban.allColumns.filter(c => c.id !== 'archived'),
-    [kanban.allColumns]
-  );
+  const kanbanColumns = useMemo(() => kanban.allColumns, [kanban.allColumns]);
   const visibleColumns = useMemo(() => 
     kanbanColumns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
     [kanbanColumns]
@@ -141,6 +147,9 @@ export function KanbanBoard() {
     [kanbanColumns]
   );
 
+  // Check if board is empty (no tasks)
+  const isEmpty = kanban.tasks.filter(t => !t.isArchived).length === 0;
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
@@ -148,13 +157,41 @@ export function KanbanBoard() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-2xl font-heading font-semibold text-foreground">Tareas</h1>
-              <p className="text-sm text-muted-foreground">Gestiona tu trabajo de forma visual</p>
+              <h1 className="text-2xl font-heading font-semibold text-foreground">Flujo editorial</h1>
+              <p className="text-sm text-muted-foreground">
+                Organiza el trabajo del libro por fases. Mueve tareas entre columnas y controla el progreso real (tareas + subtareas).
+              </p>
             </div>
             {/* Save Indicator */}
             <SaveIndicator status={kanban.saveStatus} />
           </div>
-          <div className="flex items-center gap-2">
+          
+          {/* Book Progress Indicator */}
+          <div className="flex items-center gap-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-3 bg-muted/50 px-4 py-2 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Progreso del libro</span>
+                      <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
+                    </div>
+                    <div className="flex items-center gap-2 min-w-[120px]">
+                      <Progress value={kanban.bookProgress} className="h-2 flex-1" />
+                      <span className="text-sm font-semibold text-foreground w-10 text-right">
+                        {kanban.bookProgress}%
+                      </span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-xs">
+                    Este porcentaje se calcula con el avance real: tareas completadas y subtareas marcadas. Las tareas archivadas no cuentan.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
             {/* Archived Tasks Button */}
             <Button
               variant="outline"
@@ -179,8 +216,6 @@ export function KanbanBoard() {
             </Button>
           </div>
         </div>
-
-        {/* Toolbar with Undo/Redo next to filters */}
 
         {/* Toolbar */}
         <div className="flex items-center gap-4">
@@ -232,7 +267,7 @@ export function KanbanBoard() {
             )}
           </Button>
 
-          {/* Undo/Redo Buttons - Prominent */}
+          {/* Undo/Redo Buttons */}
           <div className="flex items-center border-2 border-primary/30 rounded-lg overflow-hidden bg-primary/5">
             <Button
               variant="ghost"
@@ -258,7 +293,7 @@ export function KanbanBoard() {
             </Button>
           </div>
 
-          {/* Column Visibility Manager - Always visible */}
+          {/* Column Visibility Manager */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -280,7 +315,6 @@ export function KanbanBoard() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              {/* Hidden columns section */}
               {hiddenColumns.length > 0 && (
                 <>
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
@@ -304,7 +338,6 @@ export function KanbanBoard() {
                   <DropdownMenuSeparator />
                 </>
               )}
-              {/* Visible columns section */}
               <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-2">
                 <Eye className="w-3 h-3" />
                 Columnas visibles ({visibleColumns.length})
@@ -338,63 +371,83 @@ export function KanbanBoard() {
         )}
       </header>
 
-      {/* Main Content - BUG FIX: Prevent overflow issues */}
+      {/* Main Content */}
       <main className="flex-1 overflow-hidden">
         {currentView === 'kanban' && (
           <div className="h-full overflow-x-auto overflow-y-hidden scrollbar-thin">
-            <div className="flex gap-4 p-6 min-w-max h-full">
-              {visibleColumns.map(column => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  tasks={kanban.getTasksByColumn(column.id)}
-                  onTaskClick={handleTaskClick}
-                  onOpenNewTaskDialog={() => handleOpenNewTaskDialog(column.id)}
-                  onUpdateColumn={(updates) => kanban.updateColumn(column.id, updates)}
-                  onDeleteColumn={() => kanban.deleteColumn(column.id)}
-                  onMoveTask={handleMoveTask}
-                  draggedTaskId={draggedTaskId}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onColumnDragStart={(e) => handleColumnDragStart(e, column.id)}
-                  onColumnDragEnd={handleColumnDragEnd}
-                  onColumnDrop={(e) => handleColumnDrop(e, column.id)}
-                  isDraggingColumn={draggedColumnId === column.id}
-                  isAnyTaskDragging={draggedTaskId !== null}
-                  wouldExceedWipLimit={kanban.wouldExceedWipLimit(column.id)}
-                  getTaskBlockedStatus={(taskId) => {
-                    const result = kanban.isTaskBlocked(taskId);
-                    return { blocked: result.blocked, blockingTasks: result.blockingTasks };
-                  }}
-                  shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
-                  onArchiveTask={(taskId) => {
-                    kanban.archiveTask(taskId);
-                    toast.success('Tarea archivada');
-                  }}
-                  restoreTargetColumns={visibleColumns.filter(c => c.id !== 'archived')}
-                  onRestoreTask={(taskId, targetColumnId) => {
-                    const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
-                    kanban.moveTask(taskId, targetColumnId, tasksInTarget);
-                    // Ensure it becomes visible again even if it was marked isArchived
-                    kanban.updateTask(taskId, {
-                      isArchived: false,
-                      status: targetColumnId === 'completed' ? 'completed' : undefined,
-                    });
-                    toast.success('Tarea restaurada');
-                  }}
-                  onUpdateTask={kanban.updateTask}
-                />
-              ))}
-              
-              {/* Add Column Button */}
-              <button
-                onClick={() => kanban.addColumn('Nueva columna')}
-                className="min-w-[300px] h-fit bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 rounded-lg p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
-              >
-                <Plus className="w-5 h-5" />
-                Añadir columna
-              </button>
-            </div>
+            {isEmpty ? (
+              /* Empty State */
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center max-w-md p-8">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Plus className="w-8 h-8 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-heading font-semibold mb-2">Empieza por aquí.</h2>
+                  <p className="text-muted-foreground mb-6">
+                    Crea tu primera tarea y colócala en la fase que toque. Publify calculará el progreso automáticamente.
+                  </p>
+                  <Button
+                    onClick={() => handleOpenNewTaskDialog()}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nueva tarea
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-4 p-6 min-w-max h-full">
+                {visibleColumns.map(column => (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    tasks={kanban.getTasksByColumn(column.id)}
+                    columnProgress={kanban.getColumnProgress(column.id)}
+                    onTaskClick={handleTaskClick}
+                    onOpenNewTaskDialog={() => handleOpenNewTaskDialog(column.id)}
+                    onUpdateColumn={(updates) => kanban.updateColumn(column.id, updates)}
+                    onDeleteColumn={() => kanban.deleteColumn(column.id)}
+                    onMoveTask={handleMoveTask}
+                    draggedTaskId={draggedTaskId}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onColumnDragStart={(e) => handleColumnDragStart(e, column.id)}
+                    onColumnDragEnd={handleColumnDragEnd}
+                    onColumnDrop={(e) => handleColumnDrop(e, column.id)}
+                    isDraggingColumn={draggedColumnId === column.id}
+                    isAnyTaskDragging={draggedTaskId !== null}
+                    wouldExceedWipLimit={kanban.wouldExceedWipLimit(column.id)}
+                    getTaskBlockedStatus={(taskId) => {
+                      const result = kanban.isTaskBlocked(taskId);
+                      return { blocked: result.blocked, blockingTasks: result.blockingTasks };
+                    }}
+                    shouldBlockMoveToColumn={kanban.shouldBlockMoveToColumn}
+                    canArchiveTask={(taskId) => kanban.canArchive(taskId)}
+                    onArchiveTask={(taskId) => {
+                      kanban.archiveTask(taskId);
+                      toast.success('Tarea archivada.');
+                    }}
+                    restoreTargetColumns={visibleColumns}
+                    onRestoreTask={(taskId, targetColumnId) => {
+                      const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
+                      kanban.moveTask(taskId, targetColumnId, tasksInTarget);
+                      kanban.updateTask(taskId, { isArchived: false });
+                      toast.success('Tarea restaurada');
+                    }}
+                    onUpdateTask={kanban.updateTask}
+                  />
+                ))}
+                
+                {/* Add Column Button */}
+                <button
+                  onClick={() => kanban.addColumn('Nueva columna', '')}
+                  className="min-w-[300px] h-fit bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-border hover:border-primary/50 rounded-lg p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-all flex-shrink-0"
+                >
+                  <Plus className="w-5 h-5" />
+                  Añadir columna
+                </button>
+              </div>
+            )}
           </div>
         )}
 

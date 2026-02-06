@@ -2,13 +2,14 @@ import { useState, useRef } from 'react';
 import { 
   MoreHorizontal, Plus, GripVertical, Pencil, Trash2, EyeOff,
   Search, Layout, FileText, Edit3, Palette, CheckCircle, Upload,
-  TrendingUp, Megaphone, Settings, Check, Folder, Ban, Archive, Lock
+  TrendingUp, Megaphone, Settings, Check, Folder, Ban, Archive, Lock, Lightbulb
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Column, Task } from '@/types/kanban';
 import { TaskCard } from './TaskCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -32,11 +39,13 @@ const iconMap: Record<string, React.ReactNode> = {
   check: <Check className="w-4 h-4" />,
   folder: <Folder className="w-4 h-4" />,
   archive: <Archive className="w-4 h-4" />,
+  lightbulb: <Lightbulb className="w-4 h-4" />,
 };
 
 interface KanbanColumnProps {
   column: Column;
   tasks: Task[];
+  columnProgress?: number;
   onTaskClick: (task: Task) => void;
   onOpenNewTaskDialog: () => void;
   onUpdateColumn: (updates: Partial<Column>) => void;
@@ -54,9 +63,10 @@ interface KanbanColumnProps {
   // Dependency blocking
   getTaskBlockedStatus?: (taskId: string) => { blocked: boolean; blockingTasks: Task[] };
   shouldBlockMoveToColumn?: (taskId: string, targetColumnId: string) => { blocked: boolean; reason: string; blockingTasks: Task[] };
-  // Archive functionality
+  // Archive functionality - now based on task completion status
+  canArchiveTask?: (taskId: string) => boolean;
   onArchiveTask?: (taskId: string) => void;
-  // Restore functionality (for Archivado)
+  // Restore functionality
   restoreTargetColumns?: Column[];
   onRestoreTask?: (taskId: string, targetColumnId: string) => void;
   // Inline editing
@@ -66,6 +76,7 @@ interface KanbanColumnProps {
 export function KanbanColumn({
   column,
   tasks,
+  columnProgress = 0,
   onTaskClick,
   onOpenNewTaskDialog,
   onUpdateColumn,
@@ -82,6 +93,7 @@ export function KanbanColumn({
   wouldExceedWipLimit = false,
   getTaskBlockedStatus,
   shouldBlockMoveToColumn,
+  canArchiveTask,
   onArchiveTask,
   restoreTargetColumns,
   onRestoreTask,
@@ -103,12 +115,11 @@ export function KanbanColumn({
     setIsEditing(false);
   };
 
-  // Improved drop zone calculation - position above or below based on mouse position
+  // Improved drop zone calculation
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Only handle task drags
     if (!draggedTaskId) return;
     
     e.dataTransfer.dropEffect = 'move';
@@ -118,7 +129,6 @@ export function KanbanColumn({
     
     const mouseY = e.clientY;
     
-    // Find the correct index based on mouse Y relative to each card's center
     let newIndex = tasks.length;
     const taskElements = container.querySelectorAll('[data-task-id]');
     
@@ -127,7 +137,6 @@ export function KanbanColumn({
       const rect = el.getBoundingClientRect();
       const cardCenter = rect.top + rect.height / 2;
       
-      // If mouse is above the center of this card, insert before it
       if (mouseY < cardCenter) {
         newIndex = i;
         break;
@@ -141,11 +150,9 @@ export function KanbanColumn({
     e.preventDefault();
     e.stopPropagation();
     
-    // Get task ID from dataTransfer as fallback, or use the state
     const taskId = draggedTaskId || e.dataTransfer.getData('application/x-task-id') || e.dataTransfer.getData('text/plain');
     
     if (taskId && dropIndex !== null) {
-      // Check if move should be blocked due to dependencies
       if (shouldBlockMoveToColumn) {
         const blockCheck = shouldBlockMoveToColumn(taskId, column.id);
         if (blockCheck.blocked) {
@@ -164,7 +171,6 @@ export function KanbanColumn({
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    // Only clear if leaving the container entirely
     const rect = columnRef.current?.getBoundingClientRect();
     if (rect) {
       const { clientX, clientY } = e;
@@ -179,10 +185,8 @@ export function KanbanColumn({
     }
   };
 
-  // BUG FIX: Column drag handlers - completely separate from task drag
   const handleColumnDragStart = (e: React.DragEvent) => {
     e.stopPropagation();
-    // Prevent column drag if a task is being dragged
     if (isAnyTaskDragging) {
       e.preventDefault();
       return;
@@ -190,7 +194,6 @@ export function KanbanColumn({
     onColumnDragStart(e);
   };
 
-  // BUG FIX: Only accept column drops when no task is being dragged
   const handleColumnDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     if (!isAnyTaskDragging && isDraggingColumn === false) {
@@ -201,7 +204,6 @@ export function KanbanColumn({
   const handleColumnDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only handle column drops, not task drops
     if (!draggedTaskId) {
       onColumnDrop(e);
     }
@@ -211,7 +213,6 @@ export function KanbanColumn({
   const showWipWarning = wouldExceedWipLimit && draggedTaskId !== null;
   const columnIcon = iconMap[column.icon] || <Folder className="w-4 h-4" />;
 
-  // Visual indicator for column drop target
   const [isColumnDropTarget, setIsColumnDropTarget] = useState(false);
 
   return (
@@ -239,9 +240,9 @@ export function KanbanColumn({
       }}
     >
       {/* Column Header */}
-      <div className="flex items-center justify-between mb-3 group">
+      <div className="flex items-center justify-between mb-1 group">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Drag Handle - only this element is draggable for columns */}
+          {/* Drag Handle */}
           <div
             draggable
             onDragStart={handleColumnDragStart}
@@ -323,6 +324,30 @@ export function KanbanColumn({
         </DropdownMenu>
       </div>
 
+      {/* Subtitle with tooltip */}
+      {column.subtitle && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="text-xs text-muted-foreground truncate mb-2 cursor-help">
+                {column.subtitle}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <p className="text-xs">{column.subtitle}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
+      {/* Column Progress */}
+      {tasks.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <Progress value={columnProgress} className="h-1 flex-1" />
+          <span className="text-xs text-muted-foreground w-8 text-right">{columnProgress}%</span>
+        </div>
+      )}
+
       {/* Tasks Container */}
       <div
         ref={tasksContainerRef}
@@ -333,9 +358,9 @@ export function KanbanColumn({
       >
         {tasks.map((task, index) => {
           const blockStatus = getTaskBlockedStatus?.(task.id) || { blocked: false, blockingTasks: [] };
+          const canArchive = canArchiveTask?.(task.id) ?? false;
           return (
             <div key={task.id} data-task-id={task.id} className="relative py-1">
-              {/* Drop indicator BEFORE this task */}
               {dropIndex === index && draggedTaskId && draggedTaskId !== task.id && (
                 <div className="absolute -top-0.5 left-0 right-0 h-1 bg-primary rounded-full z-20 shadow-[0_0_8px_hsl(var(--primary))]" />
               )}
@@ -347,9 +372,9 @@ export function KanbanColumn({
                 isDragging={draggedTaskId === task.id}
                 isBlocked={blockStatus.blocked}
                 blockingTasks={blockStatus.blockingTasks}
-                showArchiveButton={column.isDoneColumn && onArchiveTask !== undefined}
+                showArchiveButton={canArchive && onArchiveTask !== undefined}
                 onArchive={onArchiveTask ? () => onArchiveTask(task.id) : undefined}
-                showRestoreButton={column.id === 'archived' && !!onRestoreTask && !!restoreTargetColumns && restoreTargetColumns.length > 0}
+                showRestoreButton={!!onRestoreTask && !!restoreTargetColumns && restoreTargetColumns.length > 0}
                 restoreTargetColumns={restoreTargetColumns}
                 onRestoreToColumn={onRestoreTask ? (targetColumnId) => onRestoreTask(task.id, targetColumnId) : undefined}
                 onUpdateStatus={onUpdateTask ? (status) => onUpdateTask(task.id, { status }) : undefined}
