@@ -12,19 +12,71 @@ export const defaultTags: Tag[] = [
   { id: '6', name: 'SEO', color: '#06B6D4' },
 ];
 
+/**
+ * 6 Editorial Flow Columns - Fixed order
+ * These are the core phases of the book production workflow
+ */
 export const defaultColumns: Column[] = [
-  { id: 'research', title: 'Investigación', color: '#3B82F6', icon: 'search', wipLimit: null, order: 0, isHidden: false },
-  { id: 'planning', title: 'Planificación', color: '#8B5CF6', icon: 'layout', wipLimit: null, order: 1, isHidden: false },
-  { id: 'content', title: 'Contenido', color: '#06B6D4', icon: 'file-text', wipLimit: 5, order: 2, isHidden: false },
-  { id: 'editing', title: 'Edición', color: '#F59E0B', icon: 'edit', wipLimit: 3, order: 3, isHidden: false },
-  { id: 'design', title: 'Diseño', color: '#EC4899', icon: 'palette', wipLimit: 3, order: 4, isHidden: false },
-  { id: 'validation', title: 'Validación', color: '#6366F1', icon: 'check-circle', wipLimit: null, order: 5, isHidden: false },
-  { id: 'publishing', title: 'Publicación', color: '#EF4444', icon: 'upload', wipLimit: null, order: 6, isHidden: false },
-  { id: 'post-launch', title: 'Post-Lanzamiento', color: '#10B981', icon: 'trending-up', wipLimit: null, order: 7, isHidden: false },
-  { id: 'marketing', title: 'Marketing', color: '#FB923C', icon: 'megaphone', wipLimit: null, order: 8, isHidden: false },
-  { id: 'maintenance', title: 'Mantenimiento', color: '#6B7280', icon: 'settings', wipLimit: null, order: 9, isHidden: false },
-  { id: 'completed', title: 'Completado', color: '#22C55E', icon: 'check', wipLimit: null, order: 10, isHidden: false, isDoneColumn: true, isSystemColumn: true },
-  { id: 'archived', title: 'Archivado', color: '#9CA3AF', icon: 'archive', wipLimit: null, order: 11, isHidden: false, isSystemColumn: true },
+  {
+    id: 'definition',
+    title: 'Definición',
+    subtitle: 'Idea, enfoque y decisiones clave antes de producir.',
+    color: '#6366F1',
+    icon: 'layout',
+    wipLimit: null,
+    order: 0,
+    isHidden: false,
+  },
+  {
+    id: 'production',
+    title: 'Producción',
+    subtitle: 'Creación del contenido base (texto/ilustraciones/estructura).',
+    color: '#3B82F6',
+    icon: 'file-text',
+    wipLimit: 5,
+    order: 1,
+    isHidden: false,
+  },
+  {
+    id: 'review',
+    title: 'Revisión',
+    subtitle: 'Corrección, QA y validación de contenido antes de cerrar.',
+    color: '#F59E0B',
+    icon: 'edit',
+    wipLimit: 3,
+    order: 2,
+    isHidden: false,
+  },
+  {
+    id: 'preparation',
+    title: 'Preparación',
+    subtitle: 'Maquetación, portada, assets finales y metadatos listos para KDP.',
+    color: '#EC4899',
+    icon: 'palette',
+    wipLimit: 3,
+    order: 3,
+    isHidden: false,
+  },
+  {
+    id: 'publishing',
+    title: 'Publicación',
+    subtitle: 'Subida a KDP, configuración, revisión final y puesta en marcha.',
+    color: '#EF4444',
+    icon: 'upload',
+    wipLimit: null,
+    order: 4,
+    isHidden: false,
+  },
+  {
+    id: 'optimization',
+    title: 'Optimización',
+    subtitle: 'Iteraciones post-publicación: metadata, precio, Ads, reviews y mejoras.',
+    color: '#10B981',
+    icon: 'trending-up',
+    wipLimit: null,
+    order: 5,
+    isHidden: false,
+  },
 ];
 
 const defaultFilter: Filter = {
@@ -37,7 +89,7 @@ const defaultFilter: Filter = {
   showArchived: false,
 };
 
-// Helper to create subtask from checklist item (migration)
+// Helper to create subtask
 function createSubtask(text: string, completed: boolean): Subtask {
   return {
     id: generateId(),
@@ -49,15 +101,20 @@ function createSubtask(text: string, completed: boolean): Subtask {
   };
 }
 
-export function createSeedState(): KanbanState {
+/**
+ * Create seed state for a specific book
+ * @param bookId - The book ID to associate tasks with
+ */
+export function createSeedState(bookId?: string): KanbanState {
   const now = new Date();
+  const effectiveBookId = bookId || 'default-book';
   
   const sampleTasks: Task[] = [
     {
       id: generateId(),
-      title: 'Investigación nicho coloring books',
-      description: 'Análisis de competencia y demanda en Amazon.com',
-      columnId: 'research',
+      title: 'Definir concepto y público objetivo',
+      description: 'Establecer la idea central del libro y el target de lectores',
+      columnId: 'definition',
       priority: 'high',
       status: 'in_progress',
       tags: [defaultTags[0]],
@@ -68,13 +125,13 @@ export function createSeedState(): KanbanState {
       checklist: [],
       subtasks: [
         createSubtask('Investigación de nicho', true),
-        createSubtask('Análisis KWs primarias', true),
-        createSubtask('Revisión de competencia', false),
-        createSubtask('Análisis BSRs y Pricing', false),
+        createSubtask('Análisis de competencia', true),
+        createSubtask('Definir propuesta de valor', false),
+        createSubtask('Crear buyer persona', false),
       ],
       estimatedTime: 8,
       actualTime: 4,
-      relatedBook: null,
+      relatedBook: effectiveBookId,
       relatedMarket: '.com',
       attachments: [],
       dependencies: [],
@@ -83,9 +140,9 @@ export function createSeedState(): KanbanState {
     },
     {
       id: generateId(),
-      title: 'Crear outline libro recetas',
-      description: 'Estructura y TOC para libro de recetas veganas',
-      columnId: 'planning',
+      title: 'Escribir outline y estructura',
+      description: 'Crear el esquema de capítulos y flujo del contenido',
+      columnId: 'definition',
       priority: 'medium',
       status: 'not_started',
       tags: [defaultTags[2]],
@@ -95,42 +152,42 @@ export function createSeedState(): KanbanState {
       assignee: 'Carlos López',
       checklist: [],
       subtasks: [
-        createSubtask('Definir estructura', true),
-        createSubtask('Crear outline (TOC)', false),
+        createSubtask('Definir estructura general', false),
+        createSubtask('Crear outline detallado', false),
         createSubtask('Definir número de páginas', false),
       ],
       estimatedTime: 6,
       actualTime: null,
-      relatedBook: 'Recetas Veganas',
+      relatedBook: effectiveBookId,
       relatedMarket: '.es',
       attachments: [],
       dependencies: [],
-      order: 0,
+      order: 1,
       isArchived: false,
     },
     {
       id: generateId(),
-      title: 'Redacción capítulos 1-5',
-      description: 'Escribir los primeros capítulos del manuscrito',
-      columnId: 'content',
+      title: 'Redacción de contenido principal',
+      description: 'Escribir los capítulos del manuscrito',
+      columnId: 'production',
       priority: 'critical',
       status: 'in_progress',
       tags: [defaultTags[2]],
-      dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
       startDate: now,
       createdAt: now,
       assignee: 'María Sánchez',
       checklist: [],
       subtasks: [
-        createSubtask('Capítulo 1', true),
-        createSubtask('Capítulo 2', true),
-        createSubtask('Capítulo 3', false),
-        createSubtask('Capítulo 4', false),
-        createSubtask('Capítulo 5', false),
+        createSubtask('Capítulo 1 - Introducción', true),
+        createSubtask('Capítulo 2 - Fundamentos', true),
+        createSubtask('Capítulo 3 - Desarrollo', false),
+        createSubtask('Capítulo 4 - Casos prácticos', false),
+        createSubtask('Capítulo 5 - Conclusiones', false),
       ],
-      estimatedTime: 24,
-      actualTime: 10,
-      relatedBook: 'Guía de Productividad',
+      estimatedTime: 40,
+      actualTime: 16,
+      relatedBook: effectiveBookId,
       relatedMarket: '.com',
       attachments: [],
       dependencies: [],
@@ -139,13 +196,13 @@ export function createSeedState(): KanbanState {
     },
     {
       id: generateId(),
-      title: 'Diseñar portada libro infantil',
-      description: 'Crear diseño de portada front + spine + back',
-      columnId: 'design',
+      title: 'Diseñar portada y assets gráficos',
+      description: 'Crear portada frontal, lomo y contraportada',
+      columnId: 'preparation',
       priority: 'high',
       status: 'paused',
       tags: [defaultTags[3]],
-      dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
       startDate: now,
       createdAt: now,
       assignee: 'Pedro Ruiz',
@@ -154,10 +211,11 @@ export function createSeedState(): KanbanState {
         createSubtask('Diseñar portada frontal', true),
         createSubtask('Diseñar lomo', false),
         createSubtask('Diseñar contraportada', false),
+        createSubtask('Crear mockups promocionales', false),
       ],
       estimatedTime: 12,
-      actualTime: 6,
-      relatedBook: 'Cuentos para Dormir',
+      actualTime: 4,
+      relatedBook: effectiveBookId,
       relatedMarket: '.es',
       attachments: [],
       dependencies: [],
@@ -166,26 +224,27 @@ export function createSeedState(): KanbanState {
     },
     {
       id: generateId(),
-      title: 'Subir libro a KDP',
-      description: 'Configurar metadata y subir archivos',
+      title: 'Configurar y subir a KDP',
+      description: 'Preparar metadata, subir archivos y configurar producto',
       columnId: 'publishing',
       priority: 'high',
       status: 'waiting',
       tags: [defaultTags[0], defaultTags[1]],
-      dueDate: new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
       startDate: now,
       createdAt: now,
       assignee: 'Ana García',
       checklist: [],
       subtasks: [
-        createSubtask('Subir manuscrito', false),
-        createSubtask('Subir portada', false),
-        createSubtask('Configurar metadata', false),
-        createSubtask('Seleccionar categorías', false),
+        createSubtask('Subir manuscrito PDF', false),
+        createSubtask('Subir portada en alta resolución', false),
+        createSubtask('Configurar metadata y descripción', false),
+        createSubtask('Seleccionar categorías y keywords', false),
+        createSubtask('Configurar pricing', false),
       ],
       estimatedTime: 4,
       actualTime: null,
-      relatedBook: 'Mindfulness Daily',
+      relatedBook: effectiveBookId,
       relatedMarket: '.com',
       attachments: [],
       dependencies: [],
@@ -197,9 +256,9 @@ export function createSeedState(): KanbanState {
   const sampleNotes: Note[] = [
     {
       id: generateId(),
-      title: 'Ideas para nuevo nicho',
-      shortDescription: 'Posibles nichos de libros para explorar en Q1 2025',
-      content: '## Nichos potenciales\n\n- Libros de colorear para adultos (mandala)\n- Journals de gratitud\n- Planners semanales\n- Libros de actividades para niños\n\n### Prioridad alta\n- Coloring books temáticos (temporadas)',
+      title: 'Ideas para el próximo libro',
+      shortDescription: 'Posibles temas y nichos para explorar',
+      content: '## Nichos potenciales\n\n- Libros de colorear para adultos\n- Journals de gratitud\n- Planners semanales\n\n### Prioridad alta\n- Coloring books temáticos',
       priority: 'high',
       createdAt: now,
       updatedAt: now,
@@ -207,8 +266,8 @@ export function createSeedState(): KanbanState {
     {
       id: generateId(),
       title: 'Keywords de competencia',
-      shortDescription: 'Lista de keywords de competidores en Amazon.com',
-      content: 'Keywords principales:\n- adult coloring book\n- stress relief coloring\n- mindfulness coloring\n\nKeywords secundarias:\n- anxiety relief\n- relaxation coloring',
+      shortDescription: 'Lista de keywords de competidores en Amazon',
+      content: 'Keywords principales:\n- adult coloring book\n- stress relief coloring\n- mindfulness coloring',
       priority: 'medium',
       createdAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
       updatedAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
@@ -220,11 +279,11 @@ export function createSeedState(): KanbanState {
   const seedAutomations: Automation[] = [
     {
       id: generateId(),
-      name: 'Subtareas completadas → Mover a Completado',
+      name: 'Subtareas completadas → Marcar como completada',
       enabled: false,
       trigger: { type: 'PROGRESS_CHANGED' },
       conditions: [{ type: 'SUBTASKS_ALL_COMPLETED' }],
-      actions: [{ type: 'MOVE_TO_COLUMN', columnId: 'completed' }],
+      actions: [{ type: 'ARCHIVE_TASK' }],
       createdAt: seedTime,
       updatedAt: seedTime,
     },
@@ -234,7 +293,7 @@ export function createSeedState(): KanbanState {
       enabled: false,
       trigger: { type: 'PRIORITY_CHANGED' },
       conditions: [{ type: 'PRIORITY_IS', value: 'critical' }],
-      actions: [{ type: 'ADD_TAG', tagId: '2' }], // Tag "Urgente"
+      actions: [{ type: 'ADD_TAG', tagId: '2' }],
       createdAt: seedTime,
       updatedAt: seedTime,
     },
@@ -245,7 +304,7 @@ export function createSeedState(): KanbanState {
       trigger: { type: 'DUE_DATE_CHANGED' },
       conditions: [{ type: 'DUE_IN_DAYS_LESS_THAN', value: 2 }],
       actions: [
-        { type: 'ADD_TAG', tagId: '2' }, // Tag "Urgente"
+        { type: 'ADD_TAG', tagId: '2' },
         { type: 'NOTIFY_IN_APP', message: 'Tarea próxima a vencer' },
       ],
       createdAt: seedTime,

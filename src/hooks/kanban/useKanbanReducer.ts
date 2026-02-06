@@ -4,39 +4,64 @@ import { KanbanState, HistoryState, SaveStatus } from './kanban.types';
 import { kanbanReducer } from './kanban.reducer';
 import { loadKanbanState, saveKanbanState } from './kanban.storage';
 import { createSeedState } from './kanban.seed';
-import { isTaskBlocked, shouldBlockMoveToColumn, wouldCreateCycle, getDependencyEdges } from './kanban.dependencies';
+import { wouldCreateCycle, getDependencyEdges } from './kanban.dependencies';
+import { calculateTaskProgress, calculateBookProgress, calculateColumnProgress, isTaskCompleted, canArchiveTask } from './kanban.progress';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Lazy initializer for useReducer - only called once per component mount
-function getInitialHistory(): HistoryState {
-  try {
-    const stored = loadKanbanState();
-    const initialState = stored || createSeedState();
-    
-    return {
-      past: [],
-      present: initialState,
-      future: [],
-    };
-  } catch (error) {
-    console.error('Error loading kanban state:', error);
-    return {
-      past: [],
-      present: createSeedState(),
-      future: [],
-    };
-  }
+// Factory to create initializer for a specific book
+function createInitialHistory(bookId: string): () => HistoryState {
+  return () => {
+    try {
+      const stored = loadKanbanState(bookId);
+      const initialState = stored || createSeedState(bookId);
+      
+      // Ensure all tasks belong to this book
+      initialState.tasks = initialState.tasks.map(task => ({
+        ...task,
+        relatedBook: bookId,
+      }));
+      
+      return {
+        past: [],
+        present: initialState,
+        future: [],
+      };
+    } catch (error) {
+      console.error('Error loading kanban state:', error);
+      return {
+        past: [],
+        present: createSeedState(bookId),
+        future: [],
+      };
+    }
+  };
 }
 
-export function useKanbanReducer() {
-  // Use lazy initialization to avoid issues with module-level computation
-  const [history, dispatch] = useReducer(kanbanReducer, undefined, getInitialHistory);
+export function useKanbanReducer(bookId: string) {
+  // Use lazy initialization with bookId
+  const [history, dispatch] = useReducer(kanbanReducer, undefined, createInitialHistory(bookId));
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const saveTimeoutRef = useRef<number | null>(null);
   const lastSavedRef = useRef<string>('');
+  const currentBookIdRef = useRef(bookId);
 
   const { present: state, past, future } = history;
+
+  // Reload state if bookId changes
+  useEffect(() => {
+    if (currentBookIdRef.current !== bookId) {
+      currentBookIdRef.current = bookId;
+      const stored = loadKanbanState(bookId);
+      const newState = stored || createSeedState(bookId);
+      // Ensure all tasks belong to this book
+      newState.tasks = newState.tasks.map(task => ({
+        ...task,
+        relatedBook: bookId,
+      }));
+      dispatch({ type: 'INIT_STATE', payload: newState });
+    }
+  }, [bookId]);
 
   // Auto-save on state changes (debounced)
   useEffect(() => {
@@ -48,23 +73,19 @@ export function useKanbanReducer() {
       automations: state.automations,
     });
 
-    // Skip if nothing changed
     if (stateHash === lastSavedRef.current) return;
 
     setSaveStatus('saving');
 
-    // Clear existing timeout
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Debounce save
     saveTimeoutRef.current = window.setTimeout(() => {
-      saveKanbanState(state);
+      saveKanbanState(state, bookId);
       lastSavedRef.current = stateHash;
       setSaveStatus('saved');
       
-      // Reset to idle after showing "saved"
       setTimeout(() => setSaveStatus('idle'), 2000);
     }, 500);
 
@@ -73,7 +94,7 @@ export function useKanbanReducer() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [state.tasks, state.columns, state.tags, state.notes, state.automations]);
+  }, [state.tasks, state.columns, state.tags, state.notes, state.automations, bookId]);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -94,16 +115,24 @@ export function useKanbanReducer() {
 
   // ========== Actions ==========
   
-  // Undo / Redo
   const undo = useCallback(() => dispatch({ type: 'UNDO' }), []);
   const redo = useCallback(() => dispatch({ type: 'REDO' }), []);
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
 
-  // Task actions
+  // Task actions - always set relatedBook to current bookId
   const addTask = useCallback((columnId: string, task: Partial<Task>) => {
-    dispatch({ type: 'TASK_CREATED', payload: { columnId, task } });
-  }, []);
+    dispatch({ 
+      type: 'TASK_CREATED', 
+      payload: { 
+        columnId, 
+        task: {
+          ...task,
+          relatedBook: bookId, // Always set to current book
+        } 
+      } 
+    });
+  }, [bookId]);
 
   const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
     dispatch({ type: 'TASK_UPDATED', payload: { taskId, updates } });
@@ -160,8 +189,8 @@ export function useKanbanReducer() {
   }, []);
 
   // Column actions
-  const addColumn = useCallback((title: string) => {
-    dispatch({ type: 'COLUMN_CREATED', payload: title });
+  const addColumn = useCallback((title: string, subtitle: string = '') => {
+    dispatch({ type: 'COLUMN_CREATED', payload: { title, subtitle } });
   }, []);
 
   const updateColumn = useCallback((columnId: string, updates: Partial<Column>) => {
@@ -209,8 +238,13 @@ export function useKanbanReducer() {
 
   // ========== Computed / Getters ==========
   
+  // Only get tasks for the current book
+  const bookTasks = useMemo(() => {
+    return state.tasks.filter(task => task.relatedBook === bookId);
+  }, [state.tasks, bookId]);
+
   const getFilteredTasks = useCallback(() => {
-    return state.tasks.filter(task => {
+    return bookTasks.filter(task => {
       if (task.isArchived && !state.filter.showArchived) return false;
       if (state.filter.priority.length > 0 && !state.filter.priority.includes(task.priority)) return false;
       if (state.filter.tags.length > 0 && !task.tags.some(t => state.filter.tags.includes(t.id))) return false;
@@ -219,11 +253,11 @@ export function useKanbanReducer() {
       if (state.filter.market && task.relatedMarket !== state.filter.market) return false;
       return true;
     });
-  }, [state.tasks, state.filter]);
+  }, [bookTasks, state.filter]);
 
   const getArchivedTasks = useCallback(() => {
-    return state.tasks.filter(task => task.isArchived);
-  }, [state.tasks]);
+    return bookTasks.filter(task => task.isArchived);
+  }, [bookTasks]);
 
   const getTasksByColumn = useCallback((columnId: string) => {
     return getFilteredTasks()
@@ -233,41 +267,115 @@ export function useKanbanReducer() {
 
   const getUniqueAssignees = useCallback(() => {
     const assignees = new Set<string>();
-    state.tasks.forEach(task => {
+    bookTasks.forEach(task => {
       if (task.assignee) assignees.add(task.assignee);
     });
     return Array.from(assignees);
-  }, [state.tasks]);
+  }, [bookTasks]);
 
   const getUniqueMarkets = useCallback(() => {
     const markets = new Set<string>();
-    state.tasks.forEach(task => {
+    bookTasks.forEach(task => {
       if (task.relatedMarket) markets.add(task.relatedMarket);
     });
     return Array.from(markets);
-  }, [state.tasks]);
+  }, [bookTasks]);
 
-  // Get task count for a column (for WIP limit check)
   const getColumnTaskCount = useCallback((columnId: string) => {
-    return state.tasks.filter(t => t.columnId === columnId && !t.isArchived).length;
-  }, [state.tasks]);
+    return bookTasks.filter(t => t.columnId === columnId && !t.isArchived).length;
+  }, [bookTasks]);
 
-  // Check if column would exceed WIP limit
   const wouldExceedWipLimit = useCallback((columnId: string) => {
     const column = state.columns.find(c => c.id === columnId);
     if (!column?.wipLimit) return false;
     return getColumnTaskCount(columnId) >= column.wipLimit;
   }, [state.columns, getColumnTaskCount]);
 
+  // Progress calculations
+  const bookProgress = useMemo(() => {
+    return calculateBookProgress(state, bookId);
+  }, [state, bookId]);
+
+  const getColumnProgress = useCallback((columnId: string) => {
+    return calculateColumnProgress(state, bookId, columnId);
+  }, [state, bookId]);
+
+  const getTaskProgress = useCallback((taskId: string) => {
+    const task = bookTasks.find(t => t.id === taskId);
+    if (!task) return 0;
+    return Math.round(calculateTaskProgress(task) * 100);
+  }, [bookTasks]);
+
+  // Check if task can be archived
+  const canArchive = useCallback((taskId: string) => {
+    const task = bookTasks.find(t => t.id === taskId);
+    if (!task) return false;
+    return canArchiveTask(task);
+  }, [bookTasks]);
+
+  // Dependency helpers - updated to use new completion logic
+  const isTaskBlockedFn = useCallback((taskId: string) => {
+    const task = bookTasks.find(t => t.id === taskId);
+    if (!task) return { blocked: false, blockingTaskIds: [], blockingTasks: [] };
+    
+    const dependencies = task.taskDependencies || [];
+    if (dependencies.length === 0) {
+      return { blocked: false, blockingTaskIds: [], blockingTasks: [] };
+    }
+
+    const blockingTasks: Task[] = [];
+    const blockingTaskIds: string[] = [];
+
+    for (const dep of dependencies) {
+      const dependsOnTask = bookTasks.find(t => t.id === dep.dependsOnTaskId);
+      if (!dependsOnTask) continue;
+      
+      // Use new completion logic instead of isDoneColumn
+      if (!isTaskCompleted(dependsOnTask)) {
+        blockingTaskIds.push(dep.dependsOnTaskId);
+        blockingTasks.push(dependsOnTask);
+      }
+    }
+
+    return {
+      blocked: blockingTaskIds.length > 0,
+      blockingTaskIds,
+      blockingTasks,
+    };
+  }, [bookTasks]);
+
+  const shouldBlockMoveToColumn = useCallback((taskId: string, targetColumnId: string) => {
+    // No longer block moves to any column since there's no "done" column
+    // Blocking is now based on task status/progress, not column
+    return { blocked: false, reason: '', blockingTasks: [] as Task[] };
+  }, []);
+
+  const wouldCreateCycleFn = useCallback((taskId: string, dependsOnTaskId: string) => {
+    return wouldCreateCycle(taskId, dependsOnTaskId, state);
+  }, [state]);
+
+  const getDependencyEdgesFn = useCallback(() => {
+    return getDependencyEdges(state);
+  }, [state]);
+
   return {
+    // Book context
+    bookId,
+    
     // State
-    tasks: state.tasks,
+    tasks: bookTasks,
     columns: state.columns.filter(c => !c.isHidden).sort((a, b) => a.order - b.order),
     allColumns: state.columns.sort((a, b) => a.order - b.order),
     availableTags: state.tags,
     filter: state.filter,
     automations: state.automations,
     notes: state.notes,
+    
+    // Progress
+    bookProgress,
+    getColumnProgress,
+    getTaskProgress,
+    canArchive,
     
     // Save status
     saveStatus,
@@ -341,29 +449,17 @@ export function useKanbanReducer() {
       dispatch({ type: 'NOTIFICATIONS_CLEARED' });
     }, []),
     
-    // Dependency actions (Phase 7)
+    // Dependency actions
     addDependency: useCallback((taskId: string, dependsOnTaskId: string) => {
       dispatch({ type: 'DEPENDENCY_ADDED', payload: { taskId, dependsOnTaskId } });
     }, []),
     removeDependency: useCallback((taskId: string, dependencyId: string) => {
       dispatch({ type: 'DEPENDENCY_REMOVED', payload: { taskId, dependencyId } });
     }, []),
-    isTaskBlocked: useCallback((taskId: string) => {
-      const task = state.tasks.find(t => t.id === taskId);
-      if (!task) return { blocked: false, blockingTaskIds: [], blockingTasks: [] };
-      return isTaskBlocked(task, state);
-    }, [state]),
-    shouldBlockMoveToColumn: useCallback((taskId: string, targetColumnId: string) => {
-      const task = state.tasks.find(t => t.id === taskId);
-      if (!task) return { blocked: false, reason: '', blockingTasks: [] };
-      return shouldBlockMoveToColumn(task, targetColumnId, state);
-    }, [state]),
-    wouldCreateCycle: useCallback((taskId: string, dependsOnTaskId: string) => {
-      return wouldCreateCycle(taskId, dependsOnTaskId, state);
-    }, [state]),
-    getDependencyEdges: useCallback(() => {
-      return getDependencyEdges(state);
-    }, [state]),
+    isTaskBlocked: isTaskBlockedFn,
+    shouldBlockMoveToColumn,
+    wouldCreateCycle: wouldCreateCycleFn,
+    getDependencyEdges: getDependencyEdgesFn,
     
     // Getters
     getFilteredTasks,

@@ -1,14 +1,16 @@
 import { KanbanState } from './kanban.types';
 import { Task, Column, Tag, Note, Filter, Automation, Subtask, ChecklistItem, TaskDependency } from '@/types/kanban';
+import { defaultColumns } from './kanban.seed';
 
-const STORAGE_KEY = 'publify.kanban.v4'; // Bumped version for system columns migration
-const STORAGE_VERSION = 4;
+const STORAGE_VERSION = 5; // Bumped for single-book and subtitle migration
 
-// System columns that must always exist
-const SYSTEM_COLUMNS: Column[] = [
-  { id: 'completed', title: 'Completado', color: '#22C55E', icon: 'check', wipLimit: null, order: 100, isHidden: false, isDoneColumn: true, isSystemColumn: true },
-  { id: 'archived', title: 'Archivado', color: '#9CA3AF', icon: 'archive', wipLimit: null, order: 101, isHidden: false, isSystemColumn: true },
-];
+// Build storage key for a specific book
+function getStorageKey(bookId: string): string {
+  return `publify.book.${bookId}.kanban.v${STORAGE_VERSION}`;
+}
+
+// Legacy storage key (for migration)
+const LEGACY_STORAGE_KEY = 'publify.kanban.v4';
 
 interface StoragePayload {
   version: number;
@@ -169,41 +171,60 @@ function serializeState(state: KanbanState): SerializedKanbanState {
   };
 }
 
-// Ensure system columns exist in the columns array
-function ensureSystemColumns(columns: Column[]): Column[] {
-  const result = [...columns];
+// Ensure columns have subtitle (migration)
+function ensureColumnSubtitles(columns: Column[]): Column[] {
+  // Map of default subtitles by column ID
+  const defaultSubtitles: Record<string, string> = {
+    definition: 'Idea, enfoque y decisiones clave antes de producir.',
+    production: 'Creación del contenido base (texto/ilustraciones/estructura).',
+    review: 'Corrección, QA y validación de contenido antes de cerrar.',
+    preparation: 'Maquetación, portada, assets finales y metadatos listos para KDP.',
+    publishing: 'Subida a KDP, configuración, revisión final y puesta en marcha.',
+    optimization: 'Iteraciones post-publicación: metadata, precio, Ads, reviews y mejoras.',
+  };
+
+  return columns.map(col => ({
+    ...col,
+    subtitle: col.subtitle || defaultSubtitles[col.id] || '',
+  }));
+}
+
+// Filter out legacy system columns (completed, archived)
+function filterLegacySystemColumns(columns: Column[]): Column[] {
+  const legacyIds = ['completed', 'archived'];
+  return columns.filter(col => !legacyIds.includes(col.id));
+}
+
+// Ensure all 6 editorial flow columns exist
+function ensureEditorialColumns(columns: Column[]): Column[] {
+  // Filter out legacy columns first
+  let result = filterLegacySystemColumns(columns);
   
-  // Find max order to place system columns at the end
-  const maxOrder = result.reduce((max, col) => Math.max(max, col.order), -1);
+  // Check for missing editorial columns
+  const editorialColumnIds = ['definition', 'production', 'review', 'preparation', 'publishing', 'optimization'];
   
-  for (const sysCol of SYSTEM_COLUMNS) {
-    const existingIndex = result.findIndex(c => c.id === sysCol.id);
-    if (existingIndex === -1) {
-      // Add missing system column
-      result.push({
-        ...sysCol,
-        order: maxOrder + 1 + SYSTEM_COLUMNS.indexOf(sysCol),
-      });
-    } else {
-      // Ensure existing column has system flags
-      result[existingIndex] = {
-        ...result[existingIndex],
-        isSystemColumn: true,
-        isDoneColumn: sysCol.isDoneColumn,
-      };
+  for (const defCol of defaultColumns) {
+    const exists = result.some(c => c.id === defCol.id);
+    if (!exists) {
+      result.push(defCol);
     }
   }
+  
+  // Ensure correct order and subtitles
+  result = ensureColumnSubtitles(result);
+  
+  // Sort by order
+  result.sort((a, b) => a.order - b.order);
   
   return result;
 }
 
 // Deserialize the state from storage with migration support
-function deserializeState(serialized: SerializedKanbanState): KanbanState {
+function deserializeState(serialized: SerializedKanbanState, bookId: string): KanbanState {
   const now = new Date();
   
   // Migrate old automations to new format
   const migratedAutomations = (serialized.automations || []).map(a => {
-    // Check if it's already in new format
     if ('conditions' in a && 'actions' in a) {
       return {
         ...a,
@@ -211,7 +232,6 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
         updatedAt: a.updatedAt ? new Date(a.updatedAt as unknown as string) : now,
       };
     }
-    // Old format - skip (will be replaced by seeds)
     return null;
   }).filter(Boolean) as Automation[];
 
@@ -220,7 +240,6 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
       // Migrate checklist to subtasks if needed
       let subtasks = deserializeSubtasks(task.subtasks || []);
       
-      // Migration: if task has checklist but no subtasks, convert
       if (task.checklist && task.checklist.length > 0 && subtasks.length === 0) {
         subtasks = migrateChecklistToSubtasks(task.checklist);
       }
@@ -230,23 +249,40 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
       if (task.dependencies && task.dependencies.length > 0 && taskDependencies.length === 0) {
         taskDependencies = migrateLegacyDependencies(task.dependencies);
       }
+
+      // Migrate columnId from legacy columns to new ones
+      let columnId = task.columnId;
+      const legacyToNew: Record<string, string> = {
+        research: 'definition',
+        planning: 'definition',
+        content: 'production',
+        editing: 'review',
+        design: 'preparation',
+        validation: 'review',
+        'post-launch': 'optimization',
+        marketing: 'optimization',
+        maintenance: 'optimization',
+        completed: 'optimization', // Move completed tasks to optimization
+        archived: 'optimization',
+      };
+      if (legacyToNew[columnId]) {
+        columnId = legacyToNew[columnId];
+      }
       
       return {
         ...task,
+        columnId,
         createdAt: deserializeDate(task.createdAt) as Date,
         dueDate: deserializeDate(task.dueDate),
         startDate: deserializeDate(task.startDate),
         subtasks,
         taskDependencies,
-        checklist: task.checklist || [], // Keep for backwards compatibility
+        checklist: task.checklist || [],
+        // Ensure relatedBook is set
+        relatedBook: task.relatedBook || bookId,
       };
     }),
-    columns: ensureSystemColumns(serialized.columns.map(col => ({
-      ...col,
-      // Ensure isDoneColumn is set for backward compatibility
-      isDoneColumn: col.isDoneColumn ?? (col.id === 'completed' || col.title.toLowerCase().includes('completado') || col.title.toLowerCase().includes('done')),
-      isSystemColumn: col.isSystemColumn ?? (col.id === 'completed' || col.id === 'archived'),
-    }))),
+    columns: ensureEditorialColumns(serialized.columns),
     tags: serialized.tags,
     notes: serialized.notes.map(note => ({
       ...note,
@@ -262,74 +298,77 @@ function deserializeState(serialized: SerializedKanbanState): KanbanState {
     },
     automations: migratedAutomations,
     automationLogs: (serialized as any).automationLogs || [],
-    notifications: [], // Notifications are not persisted
+    notifications: [],
   };
 }
 
-// Save state to localStorage
-export function saveKanbanState(state: KanbanState): void {
+// Save state to localStorage for a specific book
+export function saveKanbanState(state: KanbanState, bookId: string): void {
   try {
     const payload: StoragePayload = {
       version: STORAGE_VERSION,
       data: serializeState(state),
       savedAt: new Date().toISOString(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(getStorageKey(bookId), JSON.stringify(payload));
   } catch (error) {
     console.error('[Kanban Storage] Error saving state:', error);
   }
 }
 
-// Load state from localStorage with migration support
-export function loadKanbanState(): KanbanState | null {
+// Load state from localStorage for a specific book with migration support
+export function loadKanbanState(bookId: string): KanbanState | null {
   try {
-    // Try v4 first
-    let stored = localStorage.getItem(STORAGE_KEY);
+    const storageKey = getStorageKey(bookId);
+    let stored = localStorage.getItem(storageKey);
     
-    // If no v4, try v3
+    // If no v5 data for this book, try legacy migration
     if (!stored) {
-      const v3Stored = localStorage.getItem('publify.kanban.v3');
-      if (v3Stored) {
-        console.log('[Kanban Storage] Migrating from v3 to v4...');
-        const v3Payload = JSON.parse(v3Stored);
-        const migratedState = deserializeState(v3Payload.data);
-        saveKanbanState(migratedState);
-        localStorage.removeItem('publify.kanban.v3');
+      // Try to migrate from legacy global storage
+      const legacyStored = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacyStored) {
+        console.log('[Kanban Storage] Migrating from legacy global storage to per-book...');
+        const legacyPayload = JSON.parse(legacyStored);
+        const migratedState = deserializeState(legacyPayload.data, bookId);
+        
+        // Filter tasks for this book only (or assign if no book set)
+        migratedState.tasks = migratedState.tasks.map(task => ({
+          ...task,
+          relatedBook: task.relatedBook || bookId,
+        }));
+        
+        saveKanbanState(migratedState, bookId);
+        // Don't remove legacy storage - other books might need it
         return migratedState;
       }
       
-      const v2Stored = localStorage.getItem('publify.kanban.v2');
-      if (v2Stored) {
-        console.log('[Kanban Storage] Migrating from v2 to v4...');
-        const v2Payload = JSON.parse(v2Stored);
-        const migratedState = deserializeState(v2Payload.data);
-        saveKanbanState(migratedState);
-        localStorage.removeItem('publify.kanban.v2');
-        return migratedState;
+      // Also try older versions
+      for (const version of ['v3', 'v2', 'v1']) {
+        const oldKey = `publify.kanban.${version}`;
+        const oldStored = localStorage.getItem(oldKey);
+        if (oldStored) {
+          console.log(`[Kanban Storage] Migrating from ${version} to v5...`);
+          const oldPayload = JSON.parse(oldStored);
+          const migratedState = deserializeState(oldPayload.data, bookId);
+          migratedState.tasks = migratedState.tasks.map(task => ({
+            ...task,
+            relatedBook: task.relatedBook || bookId,
+          }));
+          saveKanbanState(migratedState, bookId);
+          return migratedState;
+        }
       }
       
-      // Try v1
-      const v1Stored = localStorage.getItem('publify.kanban.v1');
-      if (v1Stored) {
-        console.log('[Kanban Storage] Migrating from v1 to v4...');
-        const v1Payload = JSON.parse(v1Stored);
-        const migratedState = deserializeState(v1Payload.data);
-        saveKanbanState(migratedState);
-        localStorage.removeItem('publify.kanban.v1');
-        return migratedState;
-      }
       return null;
     }
 
     const payload: StoragePayload = JSON.parse(stored);
+    const migratedState = deserializeState(payload.data, bookId);
     
-    // Always deserialize with migration to ensure system columns exist
-    const migratedState = deserializeState(payload.data);
-    
-    // If version mismatch or columns were added, save the migrated state
+    // If version mismatch, save migrated state
     if (payload.version !== STORAGE_VERSION) {
       console.warn('[Kanban Storage] Version mismatch, migrating...');
-      saveKanbanState(migratedState);
+      saveKanbanState(migratedState, bookId);
     }
 
     return migratedState;
@@ -339,24 +378,19 @@ export function loadKanbanState(): KanbanState | null {
   }
 }
 
-// Clear stored state
-export function clearKanbanState(): void {
+// Clear stored state for a book
+export function clearKanbanState(bookId: string): void {
   try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem('publify.kanban.v2');
-    localStorage.removeItem('publify.kanban.v1');
+    localStorage.removeItem(getStorageKey(bookId));
   } catch (error) {
     console.error('[Kanban Storage] Error clearing state:', error);
   }
 }
 
-// Check if storage has data
-export function hasStoredState(): boolean {
+// Check if storage has data for a book
+export function hasStoredState(bookId: string): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) !== null || 
-           localStorage.getItem('publify.kanban.v3') !== null ||
-           localStorage.getItem('publify.kanban.v2') !== null ||
-           localStorage.getItem('publify.kanban.v1') !== null;
+    return localStorage.getItem(getStorageKey(bookId)) !== null;
   } catch {
     return false;
   }

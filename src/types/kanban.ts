@@ -66,12 +66,14 @@ export interface Task {
 export interface Column {
   id: string;
   title: string;
+  /** Subtitle explaining the column's purpose in the editorial flow */
+  subtitle: string;
   color: string;
   icon: string;
   wipLimit: number | null;
   order: number;
   isHidden: boolean;
-  /** Marks this column as the "done" column for blocking logic */
+  /** @deprecated No longer used - completion is determined by task status/progress */
   isDoneColumn?: boolean;
   /** System columns cannot be deleted */
   isSystemColumn?: boolean;
