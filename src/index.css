@@ -147,14 +147,43 @@
   .kanban-card {
     @apply rounded-lg p-3 border cursor-grab active:cursor-grabbing;
     @apply transition-all duration-150 ease-out;
-    background-color: hsl(var(--card));
-    border-color: hsl(var(--border) / 0.6);
-    box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.04), 0 1px 2px -1px hsl(var(--foreground) / 0.03);
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.06) 0%,
+      hsl(var(--accent) / 0.04) 100%
+    );
+    border-color: hsl(var(--primary) / 0.15);
+    box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.05);
   }
 
   .kanban-card:hover {
-    border-color: hsl(var(--primary) / 0.5);
-    box-shadow: 0 4px 12px -2px hsl(var(--coral) / 0.15), 0 2px 4px -2px hsl(var(--foreground) / 0.05);
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.10) 0%,
+      hsl(var(--accent) / 0.07) 100%
+    );
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow: 0 4px 14px -3px hsl(var(--primary) / 0.18);
+  }
+
+  .dark .kanban-card {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.08) 0%,
+      hsl(var(--accent) / 0.05) 100%
+    );
+    border-color: hsl(var(--primary) / 0.2);
+    box-shadow: 0 1px 4px 0 hsl(0 0% 0% / 0.2);
+  }
+
+  .dark .kanban-card:hover {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.14) 0%,
+      hsl(var(--accent) / 0.09) 100%
+    );
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow: 0 4px 16px -3px hsl(var(--primary) / 0.25);
   }
 
   /* BUG FIX: Remove rotation and aggressive transforms that cause visual bugs */
