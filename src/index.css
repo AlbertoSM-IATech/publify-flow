@@ -145,13 +145,16 @@
   }
 
   .kanban-card {
-    @apply bg-card rounded-lg p-3 border border-border/50 cursor-grab active:cursor-grabbing;
+    @apply rounded-lg p-3 border cursor-grab active:cursor-grabbing;
     @apply transition-all duration-150 ease-out;
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.6);
+    box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.04), 0 1px 2px -1px hsl(var(--foreground) / 0.03);
   }
 
   .kanban-card:hover {
-    @apply border-primary/50;
-    box-shadow: 0 4px 12px -2px hsl(var(--coral) / 0.15);
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow: 0 4px 12px -2px hsl(var(--coral) / 0.15), 0 2px 4px -2px hsl(var(--foreground) / 0.05);
   }
 
   /* BUG FIX: Remove rotation and aggressive transforms that cause visual bugs */
