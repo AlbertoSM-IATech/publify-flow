@@ -13,16 +13,17 @@ export const defaultTags: Tag[] = [
 ];
 
 /**
- * 6 Editorial Flow Columns - Fixed order
- * These are the core phases of the book production workflow
+ * 6 Template Columns for new books
+ * These are the initial phases of the editorial workflow.
+ * Users CAN add, delete, rename, and reorder columns freely.
  */
 export const defaultColumns: Column[] = [
   {
-    id: 'definition',
-    title: 'Definición',
+    id: 'research',
+    title: 'Investigación',
     subtitle: 'Idea, enfoque y decisiones clave antes de producir.',
     color: '#6366F1',
-    icon: 'layout',
+    icon: 'lightbulb',
     wipLimit: null,
     order: 0,
     isHidden: false,
@@ -38,21 +39,21 @@ export const defaultColumns: Column[] = [
     isHidden: false,
   },
   {
-    id: 'review',
-    title: 'Revisión',
-    subtitle: 'Corrección, QA y validación de contenido antes de cerrar.',
-    color: '#F59E0B',
-    icon: 'edit',
-    wipLimit: 3,
-    order: 2,
-    isHidden: false,
-  },
-  {
     id: 'preparation',
     title: 'Preparación',
     subtitle: 'Maquetación, portada, assets finales y metadatos listos para KDP.',
     color: '#EC4899',
     icon: 'palette',
+    wipLimit: 3,
+    order: 2,
+    isHidden: false,
+  },
+  {
+    id: 'review',
+    title: 'Revisión',
+    subtitle: 'Corrección y validación de contenido antes de cerrar.',
+    color: '#F59E0B',
+    icon: 'edit',
     wipLimit: 3,
     order: 3,
     isHidden: false,
@@ -102,8 +103,7 @@ function createSubtask(text: string, completed: boolean): Subtask {
 }
 
 /**
- * Create seed state for a specific book
- * @param bookId - The book ID to associate tasks with
+ * Create seed state for a specific book (first load only)
  */
 export function createSeedState(bookId?: string): KanbanState {
   const now = new Date();
@@ -114,7 +114,7 @@ export function createSeedState(bookId?: string): KanbanState {
       id: generateId(),
       title: 'Definir concepto y público objetivo',
       description: 'Establecer la idea central del libro y el target de lectores',
-      columnId: 'definition',
+      columnId: 'research',
       priority: 'high',
       status: 'in_progress',
       tags: [defaultTags[0]],
@@ -142,7 +142,7 @@ export function createSeedState(bookId?: string): KanbanState {
       id: generateId(),
       title: 'Escribir outline y estructura',
       description: 'Crear el esquema de capítulos y flujo del contenido',
-      columnId: 'definition',
+      columnId: 'research',
       priority: 'medium',
       status: 'not_started',
       tags: [defaultTags[2]],

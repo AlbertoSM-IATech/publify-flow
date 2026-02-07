@@ -1,16 +1,25 @@
 import { KanbanState } from './kanban.types';
 import { Task, Column, Tag, Note, Filter, Automation, Subtask, ChecklistItem, TaskDependency } from '@/types/kanban';
-import { defaultColumns } from './kanban.seed';
 
-const STORAGE_VERSION = 5; // Bumped for single-book and subtitle migration
+const STORAGE_VERSION = 6; // Bumped for flexible columns + Investigación template
 
 // Build storage key for a specific book
 function getStorageKey(bookId: string): string {
   return `publify.book.${bookId}.kanban.v${STORAGE_VERSION}`;
 }
 
-// Legacy storage key (for migration)
-const LEGACY_STORAGE_KEY = 'publify.kanban.v4';
+// Legacy storage keys (for migration)
+const LEGACY_KEYS = [
+  'publify.kanban.v4',
+  'publify.kanban.v3',
+  'publify.kanban.v2',
+  'publify.kanban.v1',
+];
+
+// Previous per-book key pattern
+function getLegacyBookKey(bookId: string, version: number): string {
+  return `publify.book.${bookId}.kanban.v${version}`;
+}
 
 interface StoragePayload {
   version: number;
@@ -171,58 +180,64 @@ function serializeState(state: KanbanState): SerializedKanbanState {
   };
 }
 
-// Ensure columns have subtitle (migration)
-function ensureColumnSubtitles(columns: Column[]): Column[] {
-  // Map of default subtitles by column ID
-  const defaultSubtitles: Record<string, string> = {
-    definition: 'Idea, enfoque y decisiones clave antes de producir.',
-    production: 'Creación del contenido base (texto/ilustraciones/estructura).',
-    review: 'Corrección, QA y validación de contenido antes de cerrar.',
-    preparation: 'Maquetación, portada, assets finales y metadatos listos para KDP.',
-    publishing: 'Subida a KDP, configuración, revisión final y puesta en marcha.',
-    optimization: 'Iteraciones post-publicación: metadata, precio, Ads, reviews y mejoras.',
-  };
+/**
+ * Soft migration for columns:
+ * - Ensure all columns have subtitle (add empty string if missing)
+ * - Remove legacy system columns (completed, archived) ONLY if they are system columns
+ * - Do NOT force any specific set of columns — respect user customizations
+ */
+function migrateColumns(columns: Column[]): Column[] {
+  // Remove legacy system columns that were auto-generated
+  const legacySystemIds = ['completed', 'archived'];
+  let result = columns.filter(col => !legacySystemIds.includes(col.id));
 
-  return columns.map(col => ({
+  // Ensure all columns have subtitle
+  result = result.map(col => ({
     ...col,
-    subtitle: col.subtitle || defaultSubtitles[col.id] || '',
+    subtitle: col.subtitle || '',
   }));
-}
 
-// Filter out legacy system columns (completed, archived)
-function filterLegacySystemColumns(columns: Column[]): Column[] {
-  const legacyIds = ['completed', 'archived'];
-  return columns.filter(col => !legacyIds.includes(col.id));
-}
+  // Ensure correct order field
+  result = result.map((col, i) => ({
+    ...col,
+    order: col.order ?? i,
+  }));
 
-// Ensure all 6 editorial flow columns exist
-function ensureEditorialColumns(columns: Column[]): Column[] {
-  // Filter out legacy columns first
-  let result = filterLegacySystemColumns(columns);
-  
-  // Check for missing editorial columns
-  const editorialColumnIds = ['definition', 'production', 'review', 'preparation', 'publishing', 'optimization'];
-  
-  for (const defCol of defaultColumns) {
-    const exists = result.some(c => c.id === defCol.id);
-    if (!exists) {
-      result.push(defCol);
-    }
-  }
-  
-  // Ensure correct order and subtitles
-  result = ensureColumnSubtitles(result);
-  
   // Sort by order
   result.sort((a, b) => a.order - b.order);
-  
+
   return result;
 }
+
+/**
+ * Map legacy column IDs to new template IDs for task migration.
+ * Only maps known legacy IDs — unknown IDs are left as-is.
+ */
+const LEGACY_COLUMN_MAP: Record<string, string> = {
+  // Old "definition" phase → new "research"
+  definition: 'research',
+  // Other legacy mappings
+  research: 'research',
+  planning: 'research',
+  content: 'production',
+  editing: 'review',
+  design: 'preparation',
+  validation: 'review',
+  'post-launch': 'optimization',
+  marketing: 'optimization',
+  maintenance: 'optimization',
+};
 
 // Deserialize the state from storage with migration support
 function deserializeState(serialized: SerializedKanbanState, bookId: string): KanbanState {
   const now = new Date();
   
+  // Migrate columns (soft — respect user customizations)
+  const migratedColumns = migrateColumns(serialized.columns);
+
+  // Build set of valid column IDs from migrated columns
+  const validColumnIds = new Set(migratedColumns.map(c => c.id));
+
   // Migrate old automations to new format
   const migratedAutomations = (serialized.automations || []).map(a => {
     if ('conditions' in a && 'actions' in a) {
@@ -250,23 +265,15 @@ function deserializeState(serialized: SerializedKanbanState, bookId: string): Ka
         taskDependencies = migrateLegacyDependencies(task.dependencies);
       }
 
-      // Migrate columnId from legacy columns to new ones
+      // Migrate columnId from legacy columns
       let columnId = task.columnId;
-      const legacyToNew: Record<string, string> = {
-        research: 'definition',
-        planning: 'definition',
-        content: 'production',
-        editing: 'review',
-        design: 'preparation',
-        validation: 'review',
-        'post-launch': 'optimization',
-        marketing: 'optimization',
-        maintenance: 'optimization',
-        completed: 'optimization', // Move completed tasks to optimization
-        archived: 'optimization',
-      };
-      if (legacyToNew[columnId]) {
-        columnId = legacyToNew[columnId];
+      if (LEGACY_COLUMN_MAP[columnId] && !validColumnIds.has(columnId)) {
+        columnId = LEGACY_COLUMN_MAP[columnId];
+      }
+
+      // If columnId still doesn't exist in columns, assign to first column
+      if (!validColumnIds.has(columnId) && migratedColumns.length > 0) {
+        columnId = migratedColumns[0].id;
       }
       
       return {
@@ -278,11 +285,10 @@ function deserializeState(serialized: SerializedKanbanState, bookId: string): Ka
         subtasks,
         taskDependencies,
         checklist: task.checklist || [],
-        // Ensure relatedBook is set
         relatedBook: task.relatedBook || bookId,
       };
     }),
-    columns: ensureEditorialColumns(serialized.columns),
+    columns: migratedColumns,
     tags: serialized.tags,
     notes: serialized.notes.map(note => ({
       ...note,
@@ -322,34 +328,31 @@ export function loadKanbanState(bookId: string): KanbanState | null {
     const storageKey = getStorageKey(bookId);
     let stored = localStorage.getItem(storageKey);
     
-    // If no v5 data for this book, try legacy migration
+    // If no current version data, try previous per-book versions
     if (!stored) {
-      // Try to migrate from legacy global storage
-      const legacyStored = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacyStored) {
-        console.log('[Kanban Storage] Migrating from legacy global storage to per-book...');
-        const legacyPayload = JSON.parse(legacyStored);
-        const migratedState = deserializeState(legacyPayload.data, bookId);
-        
-        // Filter tasks for this book only (or assign if no book set)
-        migratedState.tasks = migratedState.tasks.map(task => ({
-          ...task,
-          relatedBook: task.relatedBook || bookId,
-        }));
-        
-        saveKanbanState(migratedState, bookId);
-        // Don't remove legacy storage - other books might need it
-        return migratedState;
-      }
-      
-      // Also try older versions
-      for (const version of ['v3', 'v2', 'v1']) {
-        const oldKey = `publify.kanban.${version}`;
-        const oldStored = localStorage.getItem(oldKey);
+      for (let v = STORAGE_VERSION - 1; v >= 1; v--) {
+        const oldBookKey = getLegacyBookKey(bookId, v);
+        const oldStored = localStorage.getItem(oldBookKey);
         if (oldStored) {
-          console.log(`[Kanban Storage] Migrating from ${version} to v5...`);
+          console.log(`[Kanban Storage] Migrating from per-book v${v} to v${STORAGE_VERSION}...`);
           const oldPayload = JSON.parse(oldStored);
           const migratedState = deserializeState(oldPayload.data, bookId);
+          migratedState.tasks = migratedState.tasks.map(task => ({
+            ...task,
+            relatedBook: task.relatedBook || bookId,
+          }));
+          saveKanbanState(migratedState, bookId);
+          return migratedState;
+        }
+      }
+
+      // Try legacy global storage keys
+      for (const legacyKey of LEGACY_KEYS) {
+        const legacyStored = localStorage.getItem(legacyKey);
+        if (legacyStored) {
+          console.log(`[Kanban Storage] Migrating from legacy global ${legacyKey}...`);
+          const legacyPayload = JSON.parse(legacyStored);
+          const migratedState = deserializeState(legacyPayload.data, bookId);
           migratedState.tasks = migratedState.tasks.map(task => ({
             ...task,
             relatedBook: task.relatedBook || bookId,

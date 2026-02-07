@@ -293,6 +293,17 @@ export function KanbanBoard({ bookId }: KanbanBoardProps) {
             </Button>
           </div>
 
+          {/* Tags Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowTagManager(true)}
+            className="border-border gap-2"
+          >
+            <Tag className="w-4 h-4" />
+            <span className="hidden sm:inline text-xs">Etiquetas</span>
+          </Button>
+
           {/* Column Visibility Manager */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
