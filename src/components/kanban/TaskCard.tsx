@@ -1,4 +1,9 @@
-import { Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical, Lock, Archive, CornerUpLeft } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Calendar, CheckSquare, Paperclip, AlertCircle, GripVertical,
+  Lock, Archive, CornerUpLeft, MoreVertical, ExternalLink,
+  ArrowRight, CheckCircle2, Trash2
+} from 'lucide-react';
 import { Task, Priority, TaskStatus, Column } from '@/types/kanban';
 import { cn } from '@/lib/utils';
 import { format, isBefore, startOfDay } from 'date-fns';
@@ -17,6 +22,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import { InlinePrioritySelect, InlineStatusSelect } from './InlineEditors';
 
@@ -37,6 +46,11 @@ interface TaskCardProps {
   // Inline editing
   onUpdateStatus?: (status: TaskStatus) => void;
   onUpdatePriority?: (priority: Priority) => void;
+  // Context menu actions
+  onMarkCompleted?: () => void;
+  onDelete?: () => void;
+  onMoveToColumn?: (columnId: string) => void;
+  availableColumns?: Column[];
 }
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
@@ -55,8 +69,17 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   completed: { label: 'Terminado', color: '#22C55E' },
 };
 
-export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, isBlocked = false, blockingTasks = [], onArchive, showArchiveButton = false, showRestoreButton = false, restoreTargetColumns = [], onRestoreToColumn, onUpdateStatus, onUpdatePriority }: TaskCardProps) {
+export function TaskCard({
+  task, onClick, onDragStart, onDragEnd, isDragging,
+  isBlocked = false, blockingTasks = [],
+  onArchive, showArchiveButton = false,
+  showRestoreButton = false, restoreTargetColumns = [], onRestoreToColumn,
+  onUpdateStatus, onUpdatePriority,
+  onMarkCompleted, onDelete, onMoveToColumn, availableColumns = [],
+}: TaskCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // Use subtasks for progress calculation
   const subtasks = task.subtasks || [];
   const completedSubtasks = subtasks.filter(s => s.completed).length;
@@ -65,6 +88,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
   
   const isOverdue = task.dueDate && isBefore(new Date(task.dueDate), startOfDay(new Date()));
   const isDueSoon = task.dueDate && !isOverdue && isBefore(new Date(task.dueDate), new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
+  const isCompleted = task.status === 'completed' || subtaskProgress === 100;
 
   const handleDragStart = (e: React.DragEvent) => {
     e.stopPropagation();
@@ -72,13 +96,11 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
     e.dataTransfer.setData('text/plain', task.id);
     e.dataTransfer.setData('application/x-task-id', task.id);
     
-    // Create custom drag image
     if (cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
       e.dataTransfer.setDragImage(cardRef.current, rect.width / 2, 20);
     }
     
-    // Call parent immediately to set draggedTaskId state
     onDragStart(e);
   };
 
@@ -93,7 +115,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
     <div
       ref={cardRef}
       className={cn(
-        "kanban-card select-none cursor-pointer relative",
+        "kanban-card select-none cursor-pointer relative group/card",
         isDragging && "opacity-50 ring-2 ring-primary/50",
         isBlocked && "ring-1 ring-amber-500/50"
       )}
@@ -102,7 +124,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Blocked Badge - Top right corner */}
+      {/* Blocked Badge */}
       {isBlocked && blockingTasks.length > 0 && (
         <TooltipProvider>
           <Tooltip>
@@ -125,6 +147,97 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
           </Tooltip>
         </TooltipProvider>
       )}
+
+      {/* Context Menu (three-dot) */}
+      <div className={cn(
+        "absolute top-2 right-2 z-10 transition-opacity",
+        menuOpen ? "opacity-100" : "opacity-0 group-hover/card:opacity-100"
+      )}>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 hover:bg-muted/80"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onClick(); }}>
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Abrir detalles
+            </DropdownMenuItem>
+
+            {/* Move to… submenu */}
+            {onMoveToColumn && availableColumns.length > 0 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Mover a…
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="w-52">
+                    {availableColumns
+                      .filter(col => col.id !== task.columnId)
+                      .map(col => (
+                        <DropdownMenuItem
+                          key={col.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpen(false);
+                            onMoveToColumn(col.id);
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <span
+                            className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: col.color }}
+                          />
+                          <span className="truncate">{col.title}</span>
+                        </DropdownMenuItem>
+                      ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            )}
+
+            <DropdownMenuSeparator />
+
+            {/* Mark completed */}
+            {onMarkCompleted && !isCompleted && (
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onMarkCompleted(); }}>
+                <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                Marcar como completada
+              </DropdownMenuItem>
+            )}
+
+            {/* Archive */}
+            {onArchive && isCompleted && (
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onArchive(); }}>
+                <Archive className="w-4 h-4 mr-2" />
+                Archivar
+              </DropdownMenuItem>
+            )}
+
+            {/* Delete */}
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(); }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Header with drag handle and status */}
       <div className="flex items-center gap-2 mb-2 -mt-1">
         <GripVertical className="w-4 h-4 text-muted-foreground/50 cursor-grab flex-shrink-0" />
@@ -169,7 +282,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
       </div>
 
       {/* Title */}
-      <h4 className="font-medium text-foreground mb-2 line-clamp-2">{task.title}</h4>
+      <h4 className="font-medium text-foreground mb-2 line-clamp-2 pr-6">{task.title}</h4>
 
       {/* Description preview */}
       {task.description && (
@@ -249,7 +362,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
             </span>
           )}
 
-          {/* Restore Button - only show for archived column */}
+          {/* Restore Button */}
           {showRestoreButton && onRestoreToColumn && restoreTargetColumns.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -287,7 +400,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging, is
             </DropdownMenu>
           )}
           
-          {/* Archive Button - only show for completed tasks */}
+          {/* Archive Button (inline on card) */}
           {showArchiveButton && onArchive && (
             <TooltipProvider>
               <Tooltip>

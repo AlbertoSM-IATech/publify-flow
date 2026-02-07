@@ -446,6 +446,15 @@ export function KanbanBoard({ bookId }: KanbanBoardProps) {
                       toast.success('Tarea restaurada');
                     }}
                     onUpdateTask={kanban.updateTask}
+                    onDeleteTask={(taskId) => {
+                      kanban.deleteTask(taskId);
+                      toast.success('Tarea eliminada');
+                    }}
+                    onMoveTaskToColumn={(taskId, targetColumnId) => {
+                      const tasksInTarget = kanban.getTasksByColumn(targetColumnId).length;
+                      handleMoveTask(taskId, targetColumnId, tasksInTarget);
+                    }}
+                    allVisibleColumns={visibleColumns}
                   />
                 ))}
                 

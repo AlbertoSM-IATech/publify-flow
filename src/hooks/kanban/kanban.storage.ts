@@ -181,43 +181,24 @@ function serializeState(state: KanbanState): SerializedKanbanState {
 }
 
 /**
- * Soft migration for columns:
- * - Ensure all columns have subtitle (add empty string if missing)
- * - Remove legacy system columns (completed, archived) ONLY if they are system columns
- * - Do NOT force any specific set of columns — respect user customizations
+ * New template column definitions for migration.
+ * When old editorial columns are detected, they get replaced with these.
  */
-function migrateColumns(columns: Column[]): Column[] {
-  // Remove legacy system columns that were auto-generated
-  const legacySystemIds = ['completed', 'archived'];
-  let result = columns.filter(col => !legacySystemIds.includes(col.id));
+import { defaultColumns } from './kanban.seed';
 
-  // Ensure all columns have subtitle
-  result = result.map(col => ({
-    ...col,
-    subtitle: col.subtitle || '',
-  }));
-
-  // Ensure correct order field
-  result = result.map((col, i) => ({
-    ...col,
-    order: col.order ?? i,
-  }));
-
-  // Sort by order
-  result.sort((a, b) => a.order - b.order);
-
-  return result;
+const NEW_TEMPLATE_BY_ID: Record<string, Column> = {};
+for (const col of defaultColumns) {
+  NEW_TEMPLATE_BY_ID[col.id] = col;
 }
 
 /**
- * Map legacy column IDs to new template IDs for task migration.
- * Only maps known legacy IDs — unknown IDs are left as-is.
+ * Map legacy column IDs to new template IDs.
+ * Both for column objects and task columnId migration.
  */
 const LEGACY_COLUMN_MAP: Record<string, string> = {
   // Old "definition" phase → new "research"
   definition: 'research',
   // Other legacy mappings
-  research: 'research',
   planning: 'research',
   content: 'production',
   editing: 'review',
@@ -227,6 +208,68 @@ const LEGACY_COLUMN_MAP: Record<string, string> = {
   marketing: 'optimization',
   maintenance: 'optimization',
 };
+
+/**
+ * Migration for columns:
+ * - Remove legacy system columns (completed, archived)
+ * - Transform old editorial column IDs to new template (definition → research, etc.)
+ * - Update titles/subtitles for known template columns
+ * - Preserve any truly custom columns the user added
+ * - Ensure all columns have subtitle
+ */
+function migrateColumns(columns: Column[]): Column[] {
+  // Remove legacy system columns
+  const legacySystemIds = ['completed', 'archived'];
+  let result = columns.filter(col => !legacySystemIds.includes(col.id));
+
+  // Transform old column IDs to new ones
+  result = result.map(col => {
+    const newId = LEGACY_COLUMN_MAP[col.id];
+    if (newId && newId !== col.id) {
+      // This is an old column that maps to a new template column
+      const template = NEW_TEMPLATE_BY_ID[newId];
+      if (template) {
+        return {
+          ...template,
+          order: col.order,
+          isHidden: col.isHidden,
+          wipLimit: col.wipLimit,
+        };
+      }
+      return { ...col, id: newId, subtitle: col.subtitle || '' };
+    }
+    
+    // If the column ID matches a template column, update title/subtitle to latest
+    const template = NEW_TEMPLATE_BY_ID[col.id];
+    if (template) {
+      return {
+        ...col,
+        title: template.title,
+        subtitle: template.subtitle,
+        color: template.color,
+        icon: template.icon,
+      };
+    }
+
+    // Custom column — just ensure subtitle exists
+    return { ...col, subtitle: col.subtitle || '' };
+  });
+
+  // Deduplicate by ID (in case mapping created duplicates)
+  const seen = new Set<string>();
+  result = result.filter(col => {
+    if (seen.has(col.id)) return false;
+    seen.add(col.id);
+    return true;
+  });
+
+  // Re-index order
+  result = result.map((col, i) => ({ ...col, order: col.order ?? i }));
+  result.sort((a, b) => a.order - b.order);
+  result = result.map((col, i) => ({ ...col, order: i }));
+
+  return result;
+}
 
 // Deserialize the state from storage with migration support
 function deserializeState(serialized: SerializedKanbanState, bookId: string): KanbanState {

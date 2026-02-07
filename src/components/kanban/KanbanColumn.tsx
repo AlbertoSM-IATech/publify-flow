@@ -71,6 +71,10 @@ interface KanbanColumnProps {
   onRestoreTask?: (taskId: string, targetColumnId: string) => void;
   // Inline editing
   onUpdateTask?: (taskId: string, updates: Partial<Task>) => void;
+  // Context menu actions
+  onDeleteTask?: (taskId: string) => void;
+  onMoveTaskToColumn?: (taskId: string, targetColumnId: string) => void;
+  allVisibleColumns?: Column[];
 }
 
 export function KanbanColumn({
@@ -98,6 +102,9 @@ export function KanbanColumn({
   restoreTargetColumns,
   onRestoreTask,
   onUpdateTask,
+  onDeleteTask,
+  onMoveTaskToColumn,
+  allVisibleColumns = [],
 }: KanbanColumnProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -379,6 +386,10 @@ export function KanbanColumn({
                 onRestoreToColumn={onRestoreTask ? (targetColumnId) => onRestoreTask(task.id, targetColumnId) : undefined}
                 onUpdateStatus={onUpdateTask ? (status) => onUpdateTask(task.id, { status }) : undefined}
                 onUpdatePriority={onUpdateTask ? (priority) => onUpdateTask(task.id, { priority }) : undefined}
+                onMarkCompleted={onUpdateTask ? () => onUpdateTask(task.id, { status: 'completed' }) : undefined}
+                onDelete={onDeleteTask ? () => onDeleteTask(task.id) : undefined}
+                onMoveToColumn={onMoveTaskToColumn ? (colId) => onMoveTaskToColumn(task.id, colId) : undefined}
+                availableColumns={allVisibleColumns}
               />
             </div>
           );
