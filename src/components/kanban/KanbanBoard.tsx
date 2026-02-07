@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Plus, Search, Filter, LayoutGrid, List, Calendar, GanttChart, Tag, FileText, Undo2, Redo2, EyeOff, Eye, Archive, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,15 +7,16 @@ import { useKanbanReducer } from '@/hooks/kanban';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskDetailPanel } from './TaskDetailPanel';
 import { CompactFilterPanel } from './CompactFilterPanel';
-import { ListView } from './ListView';
-import { CalendarView } from './CalendarView';
-import { TimelineView } from './TimelineView';
-import { NotesView } from './NotesView';
 import { NewTaskDialog } from './NewTaskDialog';
 import { TagManager } from './TagManager';
 import { SaveIndicator } from './SaveIndicator';
 import { ArchivedTasksPanel } from './ArchivedTasksPanel';
 import { Task, ViewType } from '@/types/kanban';
+
+const ListView = lazy(() => import('./ListView').then(m => ({ default: m.ListView })));
+const CalendarView = lazy(() => import('./CalendarView').then(m => ({ default: m.CalendarView })));
+const TimelineView = lazy(() => import('./TimelineView').then(m => ({ default: m.TimelineView })));
+const NotesView = lazy(() => import('./NotesView').then(m => ({ default: m.NotesView })));
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -471,58 +472,60 @@ export function KanbanBoard({ bookId }: KanbanBoardProps) {
           </div>
         )}
 
-        {currentView === 'list' && (
-          <ListView
-            tasks={kanban.getFilteredTasks()}
-            columns={kanban.columns}
-            onTaskClick={handleTaskClick}
-            onUpdateTask={kanban.updateTask}
-            getTaskBlockedStatus={(taskId) => {
-              const result = kanban.isTaskBlocked(taskId);
-              return { blocked: result.blocked, blockingTasks: result.blockingTasks };
-            }}
-          />
-        )}
+        <Suspense fallback={<div className="flex-1 min-h-[200px]" />}>
+          {currentView === 'list' && (
+            <ListView
+              tasks={kanban.getFilteredTasks()}
+              columns={kanban.columns}
+              onTaskClick={handleTaskClick}
+              onUpdateTask={kanban.updateTask}
+              getTaskBlockedStatus={(taskId) => {
+                const result = kanban.isTaskBlocked(taskId);
+                return { blocked: result.blocked, blockingTasks: result.blockingTasks };
+              }}
+            />
+          )}
 
-        {currentView === 'calendar' && (
-          <CalendarView
-            tasks={kanban.getFilteredTasks()}
-            columns={kanban.columns}
-            availableTags={kanban.availableTags}
-            onTaskClick={handleTaskClick}
-            onAddTask={kanban.addTask}
-            onUpdateTask={kanban.updateTask}
-          />
-        )}
+          {currentView === 'calendar' && (
+            <CalendarView
+              tasks={kanban.getFilteredTasks()}
+              columns={kanban.columns}
+              availableTags={kanban.availableTags}
+              onTaskClick={handleTaskClick}
+              onAddTask={kanban.addTask}
+              onUpdateTask={kanban.updateTask}
+            />
+          )}
 
-        {currentView === 'timeline' && (
-          <TimelineView
-            tasks={kanban.getFilteredTasks()}
-            columns={kanban.columns}
-            onTaskClick={handleTaskClick}
-            onUpdateTask={kanban.updateTask}
-            getDependencyEdges={kanban.getDependencyEdges}
-          />
-        )}
+          {currentView === 'timeline' && (
+            <TimelineView
+              tasks={kanban.getFilteredTasks()}
+              columns={kanban.columns}
+              onTaskClick={handleTaskClick}
+              onUpdateTask={kanban.updateTask}
+              getDependencyEdges={kanban.getDependencyEdges}
+            />
+          )}
 
-        {currentView === 'notes' && (
-          <NotesView
-            notes={kanban.notes}
-            onAddNote={kanban.addNote}
-            onUpdateNote={kanban.updateNote}
-            onDeleteNote={kanban.deleteNote}
-            columns={visibleColumns}
-            onConvertToTask={(note, columnId) => {
-              kanban.addTask(columnId, {
-                title: note.title,
-                description: note.content || note.shortDescription || '',
-                priority: note.priority,
-                status: 'not_started',
-              });
-              toast.success('Nota convertida en tarea');
-            }}
-          />
-        )}
+          {currentView === 'notes' && (
+            <NotesView
+              notes={kanban.notes}
+              onAddNote={kanban.addNote}
+              onUpdateNote={kanban.updateNote}
+              onDeleteNote={kanban.deleteNote}
+              columns={visibleColumns}
+              onConvertToTask={(note, columnId) => {
+                kanban.addTask(columnId, {
+                  title: note.title,
+                  description: note.content || note.shortDescription || '',
+                  priority: note.priority,
+                  status: 'not_started',
+                });
+                toast.success('Nota convertida en tarea');
+              }}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* Task Detail Panel */}
