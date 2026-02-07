@@ -137,9 +137,10 @@ function savePanelWidth(width: number): void {
 
 function loadPanelWide(): boolean {
   try {
-    return localStorage.getItem(PANEL_WIDE_STORAGE_KEY) === 'true';
+    const stored = localStorage.getItem(PANEL_WIDE_STORAGE_KEY);
+    if (stored !== null) return stored === 'true';
   } catch { /* ignore */ }
-  return false;
+  return true;
 }
 
 function savePanelWide(wide: boolean): void {
@@ -475,18 +476,10 @@ export function TaskDetailPanel({
 
   const currentStatus = statusOptions.find(s => s.value === task.status) || statusOptions[0];
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40"
-        onClick={onClose}
-      />
-      
-      {/* Panel */}
+    return (
       <div
         ref={panelRef}
-        className="fixed right-0 top-0 h-full bg-card border-l border-border shadow-xl z-50 animate-slide-in-right flex flex-col overflow-hidden"
+        className="fixed right-0 top-0 h-full bg-card border-l border-border shadow-xl z-40 animate-slide-in-right flex flex-col overflow-hidden"
         style={{ width: `${panelWidth}px` }}
       >
         {/* Resize Handle */}
@@ -945,6 +938,5 @@ export function TaskDetailPanel({
           </div>
         </div>
       </div>
-    </>
   );
 }
