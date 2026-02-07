@@ -111,11 +111,18 @@ export function TaskCard({
 
   const status = statusConfig[task.status] || statusConfig.not_started;
 
+  const priorityBarColor: Record<Priority, string> = {
+    critical: 'hsl(0 84% 60%)',
+    high: 'hsl(24 94% 59%)',
+    medium: 'hsl(38 92% 50%)',
+    low: 'hsl(142 71% 45%)',
+  };
+
   return (
     <div
       ref={cardRef}
       className={cn(
-        "kanban-card select-none cursor-pointer relative group/card",
+        "kanban-card select-none cursor-pointer relative group/card overflow-hidden",
         isDragging && "opacity-50 ring-2 ring-primary/50",
         isBlocked && "ring-1 ring-amber-500/50"
       )}
@@ -124,6 +131,11 @@ export function TaskCard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {/* Priority color bar */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+        style={{ backgroundColor: priorityBarColor[task.priority] }}
+      />
       {/* Blocked Badge */}
       {isBlocked && blockingTasks.length > 0 && (
         <TooltipProvider>
